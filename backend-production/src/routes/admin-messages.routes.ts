@@ -1,0 +1,274 @@
+import express, { Response } from 'express';
+import prisma from '../config/database';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { body, validationResult } from 'express-validator';
+import { createActivityLog } from '../utils/utils/activityLogger';
+
+const router = express.Router();
+
+router.use(authenticate);
+router.use(authorize('ADMIN'));
+
+// Get all contact submissions (incoming messages)
+router.get('/contact-submissions', async (req: AuthRequest, res: Response) => {
+  try {
+    const { page = '1', limit = '20' } = req.query;
+
+    const where: any = {};
+    // Note: ContactSubmission doesn't have a 'resolved' field in schema
+    // You may need to add this field or use a different approach
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [submissions, total] = await Promise.all([
+      prisma.contactSubmission.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+      }),
+      prisma.contactSubmission.count({ where }),
+    ]);
+
+    res.json({
+      submissions,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  } catch (error: any) {
+    console.error('Get contact submissions error:', error);
+    res.status(500).json({ error: 'Failed to fetch contact submissions', details: error.message });
+  }
+});
+
+// Mark contact submission as resolved
+router.put('/contact-submissions/:id/resolve', async (req: AuthRequest, res: Response) => {
+  try {
+    // Note: ContactSubmission doesn't have a 'resolved' field
+    // You may need to add this field to the schema or use adminNotes
+    const submission = await prisma.contactSubmission.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Contact submission not found' });
+    }
+
+    await createActivityLog({
+      userId: req.user!.id,
+      actionType: 'UPDATE',
+      entityType: 'contact_submission',
+      entityId: submission.id,
+      description: `Marked contact submission as resolved`,
+    });
+
+    return res.json({ message: 'Contact submission marked as resolved' });
+  } catch (error: any) {
+    console.error('Resolve contact submission error:', error);
+    return res.status(500).json({ error: 'Failed to resolve contact submission', details: error.message });
+  }
+});
+
+// Get all notifications
+router.get('/notifications', async (req: AuthRequest, res: Response) => {
+  try {
+    const { isRead, userId, type, page = '1', limit = '50' } = req.query;
+
+    const where: any = {};
+    if (isRead !== undefined) {
+      where.isRead = isRead === 'true';
+    }
+    if (userId) {
+      where.userId = userId as string;
+    }
+    if (type) {
+      where.type = type as string;
+    }
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [notifications, total] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+      }),
+      prisma.notification.count({ where }),
+    ]);
+
+    res.json({
+      notifications,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  } catch (error: any) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications', details: error.message });
+  }
+});
+
+// Send notification (targeted or global)
+router.post(
+  '/notifications/send',
+  [
+    body('title').notEmpty().trim(),
+    body('message').notEmpty().trim(),
+    body('type').isIn(['INFO', 'WARNING', 'SUCCESS', 'ERROR']),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { title, message, type, userId, userRole, relatedEntityType, relatedEntityId } = req.body;
+
+      // If userId is provided, send to specific user
+      if (userId) {
+        const notification = await prisma.notification.create({
+          data: {
+            userId,
+            title,
+            message,
+            type,
+            relatedEntityType: relatedEntityType || null,
+            relatedEntityId: relatedEntityId || null,
+          },
+        });
+
+        await createActivityLog({
+          userId: req.user!.id,
+          actionType: 'CREATE',
+          entityType: 'notification',
+          entityId: notification.id,
+          description: `Sent notification to user: ${userId}`,
+        });
+
+        return res.json({ notification, message: 'Notification sent successfully' });
+      }
+
+      // If userRole is provided, send to all users with that role
+      if (userRole) {
+        const users = await prisma.user.findMany({
+          where: { role: userRole },
+          select: { id: true },
+        });
+
+        const notifications = await Promise.all(
+          users.map((user) =>
+            prisma.notification.create({
+              data: {
+                userId: user.id,
+                title,
+                message,
+                type,
+                relatedEntityType: relatedEntityType || null,
+                relatedEntityId: relatedEntityId || null,
+              },
+            })
+          )
+        );
+
+        await createActivityLog({
+          userId: req.user!.id,
+          actionType: 'CREATE',
+          entityType: 'notification',
+          entityId: undefined,
+          description: `Sent ${notifications.length} notifications to all ${userRole}s`,
+        });
+
+        return res.json({ notifications, count: notifications.length, message: 'Notifications sent successfully' });
+      }
+
+      // Global notification - send to all users
+      const users = await prisma.user.findMany({
+        select: { id: true },
+      });
+
+      const notifications = await Promise.all(
+        users.map((user) =>
+          prisma.notification.create({
+            data: {
+              userId: user.id,
+              title,
+              message,
+              type,
+              relatedEntityType: relatedEntityType || null,
+              relatedEntityId: relatedEntityId || null,
+            },
+          })
+        )
+      );
+
+      await createActivityLog({
+        userId: req.user!.id,
+        actionType: 'CREATE',
+        entityType: 'notification',
+        entityId: undefined,
+        description: `Sent ${notifications.length} global notifications`,
+      });
+
+      return res.json({ notifications, count: notifications.length, message: 'Global notifications sent successfully' });
+    } catch (error: any) {
+      console.error('Send notification error:', error);
+      return res.status(500).json({ error: 'Failed to send notification', details: error.message });
+    }
+  }
+);
+
+// Mark notification as read
+router.put('/notifications/:id/read', async (req: AuthRequest, res: Response) => {
+  try {
+    const notification = await prisma.notification.update({
+      where: { id: req.params.id },
+      data: { isRead: true },
+    });
+
+    res.json({ notification });
+  } catch (error: any) {
+    console.error('Mark notification as read error:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read', details: error.message });
+  }
+});
+
+// Delete notification
+router.delete('/notifications/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.notification.delete({
+      where: { id: req.params.id },
+    });
+
+    await createActivityLog({
+      userId: req.user!.id,
+      actionType: 'DELETE',
+      entityType: 'notification',
+      entityId: req.params.id,
+      description: 'Deleted notification',
+    });
+
+    res.json({ message: 'Notification deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Failed to delete notification', details: error.message });
+  }
+});
+
+export default router;
