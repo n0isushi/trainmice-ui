@@ -41,7 +41,17 @@ app.use(cors({
     }
   },
   credentials: config.cors.credentials,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+  ],
+  exposedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 200,
+  preflightContinue: false,
 }));
 
 // Body parsing middleware
