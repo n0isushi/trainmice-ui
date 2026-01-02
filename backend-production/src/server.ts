@@ -28,25 +28,38 @@ app.use(helmet({
 
 // Helper function to check if origin is a Vercel preview deployment
 const isVercelPreviewOrigin = (origin: string, allowedOrigins: string[]): boolean => {
-  // Check if origin is a Vercel preview deployment
-  // Vercel preview URLs pattern: https://project-name-{hash}-{username}.vercel.app
-  // Production URL: https://project-name.vercel.app
-  if (!origin.includes('.vercel.app')) {
-    return false;
-  }
+  try {
+    // Check if origin is a Vercel preview deployment
+    // Vercel preview URLs pattern: https://project-name-{hash}-{username}.vercel.app
+    // Production URL: https://project-name.vercel.app
+    const originUrl = new URL(origin);
+    if (!originUrl.hostname.endsWith('.vercel.app')) {
+      return false;
+    }
 
-  // For each allowed origin, check if the preview origin matches the base project
-  for (const allowedOrigin of allowedOrigins) {
-    if (allowedOrigin.includes('.vercel.app')) {
-      // Extract base project name (e.g., "trainmice-mvp-krs4" from "https://trainmice-mvp-krs4.vercel.app")
-      const baseUrl = new URL(allowedOrigin);
-      const baseProjectName = baseUrl.hostname.split('.')[0];
-      
-      // Check if the origin contains the same base project name
-      if (origin.includes(baseProjectName) && origin.endsWith('.vercel.app')) {
-        return true;
+    // For each allowed origin, check if the preview origin matches the base project
+    for (const allowedOrigin of allowedOrigins) {
+      try {
+        const allowedUrl = new URL(allowedOrigin);
+        if (allowedUrl.hostname.endsWith('.vercel.app')) {
+          // Extract base project name (e.g., "trainmice-mvp-krs4" from "trainmice-mvp-krs4.vercel.app")
+          const baseProjectName = allowedUrl.hostname.split('.')[0];
+          const originProjectName = originUrl.hostname.split('.')[0];
+          
+          // Check if the preview origin starts with the same base project name
+          // e.g., "trainmice-mvp-krs4-65umyawoy..." starts with "trainmice-mvp-krs4"
+          if (originProjectName.startsWith(baseProjectName)) {
+            return true;
+          }
+        }
+      } catch {
+        // Skip invalid allowed origin
+        continue;
       }
     }
+  } catch {
+    // Invalid origin URL
+    return false;
   }
 
   return false;
