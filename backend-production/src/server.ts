@@ -26,6 +26,32 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+// Helper function to check if origin is a Vercel preview deployment
+const isVercelPreviewOrigin = (origin: string, allowedOrigins: string[]): boolean => {
+  // Check if origin is a Vercel preview deployment
+  // Vercel preview URLs pattern: https://project-name-{hash}-{username}.vercel.app
+  // Production URL: https://project-name.vercel.app
+  if (!origin.includes('.vercel.app')) {
+    return false;
+  }
+
+  // For each allowed origin, check if the preview origin matches the base project
+  for (const allowedOrigin of allowedOrigins) {
+    if (allowedOrigin.includes('.vercel.app')) {
+      // Extract base project name (e.g., "trainmice-mvp-krs4" from "https://trainmice-mvp-krs4.vercel.app")
+      const baseUrl = new URL(allowedOrigin);
+      const baseProjectName = baseUrl.hostname.split('.')[0];
+      
+      // Check if the origin contains the same base project name
+      if (origin.includes(baseProjectName) && origin.endsWith('.vercel.app')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 // CORS configuration with enhanced logging
 app.use(cors({
   origin: (origin, callback) => {
@@ -43,9 +69,15 @@ app.use(cors({
       console.log(`🔍 Allowed origins: ${config.cors.origins.join(', ')}`);
     }
 
+    // Check exact match first
     if (config.cors.origins.includes(normalizedOrigin)) {
       callback(null, true);
-    } else {
+    } 
+    // Check if it's a Vercel preview deployment
+    else if (isVercelPreviewOrigin(normalizedOrigin, config.cors.origins)) {
+      callback(null, true);
+    } 
+    else {
       // Log rejected origins for debugging
       console.warn(`⚠️  CORS rejected origin: ${normalizedOrigin}`);
       console.warn(`⚠️  Allowed origins: ${config.cors.origins.join(', ')}`);
