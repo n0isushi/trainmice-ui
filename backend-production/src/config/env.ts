@@ -98,6 +98,10 @@ export const config = {
     adminUrl: process.env.FRONTEND_URL_ADMIN || 'http://localhost:5175',
   },
   email: {
+    // Resend API configuration
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    fromEmail: process.env.RESEND_FROM_EMAIL || 'noreply@trainmice.com',
+    // Legacy SMTP config (deprecated, kept for backward compatibility)
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     secure: process.env.SMTP_SECURE === 'true',
