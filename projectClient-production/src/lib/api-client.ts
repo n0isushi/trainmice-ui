@@ -257,9 +257,14 @@ export class ApiClient {
       course_rating: raw.courseRating ?? raw.course_rating ?? null, // Rating from feedbacks table
       // Map additional fields for CourseDetail page
       learning_objectives: raw.learningObjectives ?? raw.learning_objectives ?? [],
+      learning_outcomes: raw.learningOutcomes ?? raw.learning_outcomes ?? null,
       target_audience: raw.targetAudience ?? raw.target_audience ?? null,
       methodology: raw.methodology ?? null,
       prerequisite: raw.prerequisite ?? null,
+      certificate: raw.certificate ?? null,
+      professional_development_points: raw.professionalDevelopmentPoints ?? raw.professional_development_points ?? null,
+      professional_development_points_other: raw.professionalDevelopmentPointsOther ?? raw.professional_development_points_other ?? null,
+      assessment: raw.assessment ?? false,
     };
   }
 

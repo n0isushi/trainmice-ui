@@ -3,14 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import {
   Star,
   MapPin,
-  Users,
   BookOpen,
   FileText,
   CheckCircle2,
   Calendar,
   ArrowLeft,
-  User,
-  Lock,
 } from 'lucide-react';
 import { useCourse } from '../hooks/useCourses';
 import { useTrainerByCourseId } from '../hooks/useTrainers';
@@ -21,6 +18,7 @@ import { BookingSelectionModal } from '../components/BookingSelectionModal';
 import { EventRegistrationModal } from '../components/EventRegistrationModal';
 import { LoginModal } from '../components/LoginModal';
 import { SignupModal } from '../components/SignupModal';
+import { BrochureModal } from '../components/BrochureModal';
 import { useAvailability } from '../hooks/useAvailability';
 import { auth } from '../lib/auth';
 import { formatDuration } from '../utils/calendarHelpers';
@@ -38,8 +36,8 @@ export function CourseDetail() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
+  const [isBrochureModalOpen, setIsBrochureModalOpen] = useState(false);
   const [publicEvents, setPublicEvents] = useState<any[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
 
   useEffect(() => {
     auth.getSession().then(({ user }) => {
@@ -73,7 +71,6 @@ export function CourseDetail() {
       }
       
       try {
-        setLoadingEvents(true);
         const eventsResponse = await apiClient.getEvents({ courseId: course.id });
         const events = eventsResponse?.events || [];
         
@@ -133,8 +130,6 @@ export function CourseDetail() {
       } catch (error) {
         console.error('[CourseDetail] Error fetching events:', error);
         setPublicEvents([]);
-      } finally {
-        setLoadingEvents(false);
       }
     };
 
@@ -278,7 +273,7 @@ export function CourseDetail() {
                     Course Objectives
                   </h2>
                   <ul className="space-y-3">
-                    {course.learning_objectives.map((objective, idx) => (
+                    {course.learning_objectives.map((objective: string, idx: number) => (
                       <li key={idx} className="flex items-start gap-3">
                         <CheckCircle2 className="w-6 h-6 text-green-600 mt-0.5 flex-shrink-0" />
                         <span className="text-gray-700">{objective}</span>
@@ -288,12 +283,22 @@ export function CourseDetail() {
                 </div>
               )}
 
-              {course.category && (
+              {course.learning_outcomes && course.learning_outcomes.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Category</h3>
-                  <p className="text-gray-700">{course.category}</p>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                    Learning Outcomes
+                  </h2>
+                  <ul className="space-y-3">
+                    {course.learning_outcomes.map((outcome: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-3">
+                        <CheckCircle2 className="w-6 h-6 text-teal-600 mt-0.5 flex-shrink-0" />
+                        <span className="text-gray-700">{outcome}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
+
 
               {course.target_audience && (
                 <div className="mb-6">
@@ -317,28 +322,6 @@ export function CourseDetail() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* {course.price !== null && (
-                  <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                    <DollarSign className="w-6 h-6 text-gray-700" />
-                    <div>
-                      <p className="text-sm text-gray-600">Price</p>
-                      <p className="text-xl font-semibold text-gray-900">
-                        RM {course.price.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                )} */}
-
-                {course.slots_left !== null && (
-                  <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                    <Users className="w-6 h-6 text-gray-700" />
-                    <div>
-                      <p className="text-sm text-gray-600">Available Slots</p>
-                      <p className="text-xl font-semibold text-gray-900">{course.slots_left}</p>
-                    </div>
-                  </div>
-                )}
-
                 {course.duration_hours && (
                   <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
                     <BookOpen className="w-6 h-6 text-gray-700" />
@@ -410,15 +393,13 @@ export function CourseDetail() {
 
               <div className="flex flex-col sm:flex-row gap-3 items-start">
                 {course.brochure_url && (
-                  <a
-                    href={course.brochure_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => setIsBrochureModalOpen(true)}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <FileText className="w-5 h-5" />
-                    Download Brochure
-                  </a>
+                    View Brochure
+                  </button>
                 )}
 
                 {publicEvents.length > 0 ? (
@@ -471,12 +452,6 @@ export function CourseDetail() {
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Course Information</h2>
               <dl className="space-y-3">
-                {course.category && (
-                  <div>
-                    <dt className="text-sm font-medium text-gray-600">Category</dt>
-                    <dd className="text-base text-gray-900">{course.category}</dd>
-                  </div>
-                )}
                 {course.city && (
                   <div>
                     <dt className="text-sm font-medium text-gray-600">City</dt>
@@ -489,6 +464,31 @@ export function CourseDetail() {
                     <dd className="text-base text-gray-900">{course.state}</dd>
                   </div>
                 )}
+                {course.certificate && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Certificate</dt>
+                    <dd className="text-base text-gray-900">{course.certificate}</dd>
+                  </div>
+                )}
+                {course.professional_development_points && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Professional Development Points</dt>
+                    <dd className="text-base text-gray-900">
+                      {course.professional_development_points}
+                      {course.professional_development_points_other && (
+                        <span className="text-sm text-gray-600 block mt-1">
+                          {course.professional_development_points_other}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-sm font-medium text-gray-600">Assessment</dt>
+                  <dd className="text-base text-gray-900">
+                    {course.assessment ? 'Yes' : 'No'}
+                  </dd>
+                </div>
               </dl>
             </div>
           </div>
@@ -584,7 +584,7 @@ export function CourseDetail() {
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-600 mb-2">Areas of Expertise</p>
                   <div className="flex flex-wrap gap-2">
-                    {trainer.areas_of_expertise.slice(0, 4).map((area, idx) => (
+                    {trainer.areas_of_expertise.slice(0, 4).map((area: string, idx: number) => (
                       <span
                         key={idx}
                         className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
@@ -683,6 +683,17 @@ export function CourseDetail() {
           setIsLoginModalOpen(true);
         }}
       />
+
+      {/* Brochure Modal */}
+      {course.brochure_url && (
+        <BrochureModal
+          isOpen={isBrochureModalOpen}
+          onClose={() => setIsBrochureModalOpen(false)}
+          brochureUrl={course.brochure_url}
+          courseTitle={course.title}
+          learningOutcomes={course.learning_outcomes}
+        />
+      )}
     </div>
   );
 }
