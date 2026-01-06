@@ -42,7 +42,7 @@ export async function sendVerificationEmail({
           <h1 style="color: white; margin: 0;">TrainMICE</h1>
         </div>
         
-        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        <div style="background:rgb(23, 231, 186); padding: 30px; border-radius: 0 0 10px 10px;">
           <h2 style="color: #333; margin-top: 0;">Hello,</h2>
           
           <p>Thank you for signing up with TrainMICE!</p>
