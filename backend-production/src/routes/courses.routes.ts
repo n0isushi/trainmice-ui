@@ -206,8 +206,8 @@ router.put(
             ? i.moduleTitle 
             : (i.moduleTitle ? [i.moduleTitle] : []);
           
-          // Ensure submoduleTitle is an array or null
-          let submoduleTitleArray: string[] | null = null;
+          // Ensure submoduleTitle is an array or undefined (Prisma JSON fields use undefined, not null)
+          let submoduleTitleArray: string[] | undefined = undefined;
           if (i.submoduleTitle) {
             if (Array.isArray(i.submoduleTitle)) {
               submoduleTitleArray = i.submoduleTitle;
