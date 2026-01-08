@@ -78,7 +78,7 @@ export function Header({ onLoginClick, onSignupClick }: HeaderProps) {
             {trainerUrl && (
               <button
                 onClick={handleBecomeTrainer}
-                className="px-3 py-1 text-sm font-medium text-yellow-500 hover:text-teal-600 rounded-lg transition-colors"
+                className="px-3 py-1 text-base font-medium text-yellow-500 hover:text-teal-600 rounded-lg transition-colors"
               >
                 Become Trainer
               </button>
