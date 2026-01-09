@@ -1,6 +1,6 @@
 /**
  * Brochure Generator for Courses
- * Generates a 3-page PDF brochure for courses
+ * Generates a multi-page PDF brochure for courses
  */
 
 import jsPDF from 'jspdf';
@@ -30,16 +30,43 @@ export const generateCourseBrochure = async (course: CourseData) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
-  const rightMargin = 30; // Right margin for content on first page
-  const contentWidth = pageWidth - (margin + rightMargin);
+  const contentWidth = pageWidth - (2 * margin);
+  const maxY = pageHeight - margin;
 
-  // Helper function to add text with word wrap
-  const addText = (text: string, x: number, y: number, maxWidth: number, fontSize: number = 12, fontStyle: string = 'normal') => {
+  // Helper function to check if we need a new page
+  const checkPageBreak = (currentY: number, spaceNeeded: number = 20): number => {
+    if (currentY + spaceNeeded > maxY) {
+      doc.addPage();
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      return margin;
+    }
+    return currentY;
+  };
+
+  // Helper function to add text with word wrap and page breaks
+  const addText = (
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    fontSize: number = 10,
+    fontStyle: string = 'normal',
+    lineHeight: number = 1.5
+  ): number => {
     doc.setFontSize(fontSize);
     doc.setFont('helvetica', fontStyle);
     const lines = doc.splitTextToSize(text, maxWidth);
-    doc.text(lines, x, y);
-    return y + (lines.length * fontSize * 0.4);
+    const lineSpacing = fontSize * 0.35 * lineHeight;
+    
+    let currentY = y;
+    for (let i = 0; i < lines.length; i++) {
+      currentY = checkPageBreak(currentY, lineSpacing);
+      doc.text(lines[i], x, currentY);
+      currentY += lineSpacing;
+    }
+    
+    return currentY;
   };
 
   // ============================================================================
@@ -48,15 +75,12 @@ export const generateCourseBrochure = async (course: CourseData) => {
   
   // Load and add background image
   try {
-    // Convert image to base64 for jsPDF
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
-    // Use a promise to wait for image to load and convert to base64
     await new Promise((resolve) => {
       img.onload = () => {
         try {
-          // Create canvas to convert image to base64
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
           canvas.height = img.height;
@@ -64,7 +88,6 @@ export const generateCourseBrochure = async (course: CourseData) => {
           if (ctx) {
             ctx.drawImage(img, 0, 0);
             const imgData = canvas.toDataURL('image/png');
-            // Add image as background covering entire page
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
             resolve(true);
           } else {
@@ -72,7 +95,6 @@ export const generateCourseBrochure = async (course: CourseData) => {
           }
         } catch (error) {
           console.error('Error adding image to PDF:', error);
-          // Fallback to colored background if image fails
           doc.setFillColor(230, 240, 255);
           doc.rect(0, 0, pageWidth, pageHeight, 'F');
           resolve(false);
@@ -80,22 +102,19 @@ export const generateCourseBrochure = async (course: CourseData) => {
       };
       img.onerror = () => {
         console.error('Error loading image');
-        // Fallback to colored background
         doc.setFillColor(230, 240, 255);
         doc.rect(0, 0, pageWidth, pageHeight, 'F');
         resolve(false);
       };
-      // Try to load from public folder
-      img.src = '/Brochure Pic.png';
+      img.src = '/BrochureFrontPage.png';
     });
   } catch (error) {
     console.error('Error loading background image:', error);
-    // Fallback to colored background
     doc.setFillColor(230, 240, 255);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
   }
 
-  // Calculate date text for reuse
+  // Calculate date text
   let dateText = 'TBA';
   if (course.startDate) {
     const startDate = new Date(course.startDate);
@@ -114,65 +133,107 @@ export const generateCourseBrochure = async (course: CourseData) => {
     'VIRTUAL': 'Virtual',
   };
 
-  // Course title - positioned higher and more to the right in the middle section
+  // Course title - at the top with proper margin
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(28); // Increased font size
+  doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  const titleMaxWidth = contentWidth - 30; // Extra margin for title
+  const titleMaxWidth = contentWidth;
   const titleLines = doc.splitTextToSize(course.title, titleMaxWidth);
-  const titleY = 110; // Moved up from 130
-  const titleX = margin + 30; // Moved to the right
-  doc.text(titleLines, titleX, titleY);
+  const titleY = 50;
+  
+  // Center or left-align title
+  titleLines.forEach((line: string, index: number) => {
+    doc.text(line, margin, titleY + (index * 10));
+  });
 
-  // Course details - positioned below title, moved up and to the right with larger fonts
-  let yPos = titleY + (titleLines.length * 7) + 12; // Moved up
-  doc.setFontSize(13); // Increased from 11
+  // Course details below title
+  let yPos = titleY + (titleLines.length * 10) + 20;
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'normal');
-  const detailX = margin + 30; // Moved to the right
 
   // Training Mode
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Training Mode:', detailX, yPos);
+  doc.text('Training Mode: ', margin, yPos);
   doc.setFont('helvetica', 'normal');
   const modeText = courseTypeMap[course.courseType || 'IN_HOUSE'] || course.courseType || 'In-House';
-  doc.text(modeText, detailX + 50, yPos);
+  doc.text(modeText, margin + 50, yPos);
   yPos += 10;
 
   // Date
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Date:', detailX, yPos);
+  doc.text('Date: ', margin, yPos);
   doc.setFont('helvetica', 'normal');
-  const dateLines = doc.splitTextToSize(dateText, contentWidth - 80);
-  doc.text(dateLines, detailX + 50, yPos);
-  yPos += Math.max(dateLines.length * 6, 10) + 2;
+  const dateLines = doc.splitTextToSize(dateText, contentWidth - 50);
+  dateLines.forEach((line: string, index: number) => {
+    doc.text(line, margin + 50, yPos + (index * 6));
+  });
+  yPos += Math.max(dateLines.length * 6, 10);
 
   // Venue
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Venue:', detailX, yPos);
+  doc.text('Venue: ', margin, yPos);
   doc.setFont('helvetica', 'normal');
   const venueText = course.venue || 'TBA';
-  const venueLines = doc.splitTextToSize(venueText, contentWidth - 80);
-  doc.text(venueLines, detailX + 50, yPos);
+  const venueLines = doc.splitTextToSize(venueText, contentWidth - 50);
+  venueLines.forEach((line: string, index: number) => {
+    doc.text(line, margin + 50, yPos + (index * 6));
+  });
 
-  // Footer contact info (already on image, but ensure it's visible)
-  doc.setFillColor(0, 51, 102, 0.9); // Semi-transparent overlay for readability
+  // Footer contact info
+  doc.setFillColor(0, 51, 102, 0.9);
   doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Phone: +019 9331 008', margin, pageHeight - 12);
-  doc.text('Email: enquiry@klgreens.com', margin + 80, pageHeight - 12);
-  doc.text('Website: www.klgreens.com', margin + 160, pageHeight - 12);
+  doc.text('Phone: +6019 9331 008', margin, pageHeight - 12);
+  doc.text('Email: enquiry@trainmice.com', pageWidth / 2 - 30, pageHeight - 12);
+  doc.text('Website: www.trainmice.com', pageWidth - 70, pageHeight - 12);
 
   // ============================================================================
-  // PAGE 2: COURSE DETAILS
+  // PAGE 2: COURSE DETAILS WITH BACKGROUND IMAGE
   // ============================================================================
   doc.addPage();
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  
+  // Load and add background image for second page
+  try {
+    const secondPageImg = new Image();
+    secondPageImg.crossOrigin = 'anonymous';
+    
+    await new Promise((resolve) => {
+      secondPageImg.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = secondPageImg.width;
+          canvas.height = secondPageImg.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(secondPageImg, 0, 0);
+            const imgData = canvas.toDataURL('image/jpeg');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+            resolve(true);
+          } else {
+            throw new Error('Could not get canvas context');
+          }
+        } catch (error) {
+          console.error('Error adding second page image to PDF:', error);
+          doc.setFillColor(255, 255, 255);
+          doc.rect(0, 0, pageWidth, pageHeight, 'F');
+          resolve(false);
+        }
+      };
+      secondPageImg.onerror = () => {
+        console.error('Error loading second page image');
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, pageWidth, pageHeight, 'F');
+        resolve(false);
+      };
+      secondPageImg.src = '/Brochure2ndpage.jpeg';
+    });
+  } catch (error) {
+    console.error('Error loading second page background image:', error);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  }
 
   let currentY = margin;
 
@@ -181,83 +242,89 @@ export const generateCourseBrochure = async (course: CourseData) => {
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text('COURSE INFORMATION', pageWidth / 2, currentY, { align: 'center' });
-  currentY += 20;
-
-  // Topic, Date, Venue table
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.5);
-  
-  const rowHeight = 8;
-  const col1Width = 40;
-  const col2Width = contentWidth - col1Width;
-
-  // Topic row
-  doc.rect(margin, currentY, col1Width, rowHeight);
-  doc.rect(margin + col1Width, currentY, col2Width, rowHeight);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOPIC', margin + 2, currentY + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(course.title, margin + col1Width + 2, currentY + 5);
-  currentY += rowHeight;
-
-  // Date row
-  doc.rect(margin, currentY, col1Width, rowHeight);
-  doc.rect(margin + col1Width, currentY, col2Width, rowHeight);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DATE', margin + 2, currentY + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(dateText, margin + col1Width + 2, currentY + 5);
-  currentY += rowHeight;
-
-  // Venue row
-  doc.rect(margin, currentY, col1Width, rowHeight);
-  doc.rect(margin + col1Width, currentY, col2Width, rowHeight);
-  doc.setFont('helvetica', 'bold');
-  doc.text('VENUE', margin + 2, currentY + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(course.venue || 'TBA', margin + col1Width + 2, currentY + 5);
-  currentY += rowHeight;
-
-  // Certificate row (only if HRDC claimable)
-  if (course.hrdcClaimable) {
-    doc.rect(margin, currentY, col1Width, rowHeight);
-    doc.rect(margin + col1Width, currentY, col2Width, rowHeight);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CERTIFICATE', margin + 2, currentY + 5);
-    doc.setFont('helvetica', 'normal');
-    doc.text('CERTIFICATE OF ATTENDANCE', margin + col1Width + 2, currentY + 5);
-    currentY += rowHeight;
-  }
-
   currentY += 15;
 
+  // Course details without table
+  doc.setTextColor(0, 0, 0);
+  
+  // Topic
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOPIC:', margin, currentY);
+  currentY += 7;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  currentY = addText(course.title, margin, currentY, contentWidth, 10);
+  currentY += 8;
+
+  // Date
+  currentY = checkPageBreak(currentY, 15);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATE:', margin, currentY);
+  currentY += 7;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  currentY = addText(dateText, margin, currentY, contentWidth, 10);
+  currentY += 8;
+
+  // Venue
+  currentY = checkPageBreak(currentY, 15);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('VENUE:', margin, currentY);
+  currentY += 7;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  currentY = addText(course.venue || 'TBA', margin, currentY, contentWidth, 10);
+  currentY += 8;
+
+  // Certificate (only if HRDC claimable)
+  if (course.hrdcClaimable) {
+    currentY = checkPageBreak(currentY, 15);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CERTIFICATE:', margin, currentY);
+    currentY += 7;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    currentY = addText('CERTIFICATE OF ATTENDANCE', margin, currentY, contentWidth, 10);
+    currentY += 8;
+  }
+
+  currentY += 5;
+
   // Introduction
+  currentY = checkPageBreak(currentY, 20);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Introduction:', margin, currentY);
-  currentY += 8;
+  currentY += 7;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   if (course.description) {
     currentY = addText(course.description, margin, currentY, contentWidth, 10);
   } else {
-    currentY += 5;
+    doc.text('N/A', margin, currentY);
+    currentY += 6;
   }
   currentY += 10;
 
   // Course Objectives
+  currentY = checkPageBreak(currentY, 20);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Course Objectives:', margin, currentY);
-  currentY += 8;
+  currentY += 7;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   if (course.learningObjectives && course.learningObjectives.length > 0) {
-    course.learningObjectives.forEach((obj) => {
-      doc.text(`• ${obj}`, margin + 5, currentY);
-      currentY += 6;
-    });
+    for (const obj of course.learningObjectives) {
+      currentY = checkPageBreak(currentY, 15);
+      const bulletText = `• ${obj}`;
+      currentY = addText(bulletText, margin + 2, currentY, contentWidth - 2, 10);
+      currentY += 2;
+    }
   } else {
     doc.text('N/A', margin + 5, currentY);
     currentY += 6;
@@ -265,10 +332,11 @@ export const generateCourseBrochure = async (course: CourseData) => {
   currentY += 10;
 
   // Target Audience
+  currentY = checkPageBreak(currentY, 20);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Target Audience:', margin, currentY);
-  currentY += 8;
+  currentY += 7;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   if (course.targetAudience) {
@@ -280,10 +348,11 @@ export const generateCourseBrochure = async (course: CourseData) => {
   currentY += 10;
 
   // Methodology
+  currentY = checkPageBreak(currentY, 20);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Methodology:', margin, currentY);
-  currentY += 8;
+  currentY += 7;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   if (course.methodology) {
@@ -294,7 +363,7 @@ export const generateCourseBrochure = async (course: CourseData) => {
   }
 
   // ============================================================================
-  // PAGE 3: COURSE SCHEDULE
+  // COURSE SCHEDULE (with automatic page breaks, no table)
   // ============================================================================
   doc.addPage();
   doc.setFillColor(255, 255, 255);
@@ -307,7 +376,9 @@ export const generateCourseBrochure = async (course: CourseData) => {
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text('COURSE SCHEDULE', pageWidth / 2, currentY, { align: 'center' });
-  currentY += 20;
+  currentY += 15;
+
+  doc.setTextColor(0, 0, 0);
 
   if (course.schedule && course.schedule.length > 0) {
     // Group schedule by day
@@ -324,41 +395,42 @@ export const generateCourseBrochure = async (course: CourseData) => {
       const dayItems = scheduleByDay[parseInt(day)];
       
       // Day header
+      currentY = checkPageBreak(currentY, 30);
       doc.setFillColor(0, 51, 102);
-      doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'F');
+      doc.roundedRect(margin, currentY, contentWidth, 8, 2, 2, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Day ${day}`, margin + 5, currentY + 7);
+      doc.text(`Day ${day}`, margin + 5, currentY + 6);
       currentY += 12;
+      doc.setTextColor(0, 0, 0);
 
       // Schedule items for this day
       dayItems.forEach(item => {
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.5);
-        doc.rect(margin, currentY, contentWidth, 20, 'S');
+        // Check if we need space for this item
+        currentY = checkPageBreak(currentY, 25);
 
         // Time
-        doc.setTextColor(0, 0, 0);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${item.startTime} - ${item.endTime}`, margin + 5, currentY + 7);
+        doc.text(`${item.startTime} - ${item.endTime}`, margin, currentY);
+        currentY += 6;
 
         // Module title
         doc.setFont('helvetica', 'bold');
-        doc.text(item.moduleTitle, margin + 5, currentY + 14);
+        currentY = addText(item.moduleTitle, margin + 5, currentY, contentWidth - 5, 10, 'bold');
 
         // Submodule title (if exists)
         if (item.submoduleTitle) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
-          doc.text(item.submoduleTitle, margin + 5, currentY + 19);
+          currentY = addText(item.submoduleTitle, margin + 5, currentY, contentWidth - 5, 9);
         }
 
-        currentY += 22;
+        currentY += 8;
       });
 
-      currentY += 5; // Space between days
+      currentY += 5;
     });
   } else {
     doc.setFontSize(11);
@@ -371,4 +443,3 @@ export const generateCourseBrochure = async (course: CourseData) => {
   const fileName = `${course.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_brochure.pdf`;
   doc.save(fileName);
 };
-
