@@ -64,7 +64,7 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img
-            src="/Logo Trainmice (1)(1).png"
+            src="/TrainmiceTwinleaf.png"
             alt="Trainmice"
             className="h-48 mx-auto mb-6"
           />

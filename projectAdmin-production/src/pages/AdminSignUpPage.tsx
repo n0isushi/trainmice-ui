@@ -90,16 +90,25 @@ export const AdminSignUpPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: 'url(/tropical-green-leaves-background.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="absolute inset-0 bg-black bg-opacity-30"></div>
+      <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
           <img
-            src="/Logo Trainmice (1)(1).png"
+            src="/TrainmiceTwinleaf.png"
             alt="Trainmice"
             className="h-48 mx-auto mb-6"
           />
-          <h1 className="text-3xl font-bold text-white mb-2">Create Admin Account</h1>
-          <p className="text-green-100">Set up your administrator credentials</p>
+          <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">Create Admin Account</h1>
+          <p className="text-white drop-shadow-md">Set up your administrator credentials</p>
         </div>
 
         <Card>
@@ -177,7 +186,7 @@ export const AdminSignUpPage: React.FC = () => {
           </div>
         </Card>
 
-        <p className="text-center mt-6 text-green-100 text-sm">
+        <p className="text-center mt-6 text-white text-sm drop-shadow-md">
           Trainmice Admin Dashboard &copy; 2025
         </p>
       </div>
