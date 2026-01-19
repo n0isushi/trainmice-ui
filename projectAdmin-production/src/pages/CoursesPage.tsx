@@ -63,15 +63,24 @@ export const CoursesPage: React.FC = () => {
       // Apply "Without Trainer" filter if enabled
       if (filterWithoutTrainer) {
         coursesData = coursesData.filter((c: Course) => {
-          // Check if trainer_id is null
-          const hasNoTrainerId = !c.trainer_id;
           const courseAny = c as any;
-          // Check if there are no courseTrainers
-          const hasNoCourseTrainers = !courseAny.courseTrainers || 
-            (Array.isArray(courseAny.courseTrainers) && courseAny.courseTrainers.length === 0);
+          // Check if trainer_id is null or undefined
+          const hasNoTrainerId = !c.trainer_id;
+          
+          // Check if there are no courseTrainers (could be in different formats)
+          let hasNoCourseTrainers = true;
+          if (courseAny.courseTrainers) {
+            if (Array.isArray(courseAny.courseTrainers)) {
+              hasNoCourseTrainers = courseAny.courseTrainers.length === 0;
+            } else {
+              hasNoCourseTrainers = false;
+            }
+          }
+          
           // Check if there's no trainer object
           const hasNoTrainer = !courseAny.trainer;
           
+          // Course has no trainer if: trainer_id is null AND no courseTrainers AND no trainer object
           return hasNoTrainerId && hasNoCourseTrainers && hasNoTrainer;
         });
       }

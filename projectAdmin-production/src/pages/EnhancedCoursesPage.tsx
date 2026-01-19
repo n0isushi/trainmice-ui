@@ -61,6 +61,7 @@ export const EnhancedCoursesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [filterWithoutTrainer, setFilterWithoutTrainer] = useState<boolean>(false);
   const [isPendingApprovalExpanded, setIsPendingApprovalExpanded] = useState(false);
   // Use standard category list
   const categories = COURSE_CATEGORIES;
@@ -71,11 +72,11 @@ export const EnhancedCoursesPage: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [courses, searchTerm, selectedCategory, selectedStatus]);
+  }, [courses, searchTerm, selectedCategory, selectedStatus, filterWithoutTrainer]);
 
   const fetchData = async () => {
     try {
-      const coursesResponse = await apiClient.getAdminCourses();
+      const coursesResponse = await apiClient.getAdminCourses({});
 
       const coursesData = coursesResponse.courses || [];
 
@@ -106,6 +107,9 @@ export const EnhancedCoursesPage: React.FC = () => {
         certificate: c.certificate || null,
         professionalDevelopmentPoints: c.professionalDevelopmentPoints || null,
         professionalDevelopmentPointsOther: c.professionalDevelopmentPointsOther || null,
+        // Preserve courseTrainers data from API for filtering
+        courseTrainers: c.courseTrainers || [],
+        trainer: c.trainer || null,
       }));
 
       setCourses(mappedCourses);
@@ -134,6 +138,31 @@ export const EnhancedCoursesPage: React.FC = () => {
 
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(course => course.status === selectedStatus);
+    }
+
+    // Apply "Without Trainer" filter if enabled
+    if (filterWithoutTrainer) {
+      filtered = filtered.filter((course) => {
+        const courseAny = course as any;
+        // Check if trainer_id is null or undefined
+        const hasNoTrainerId = !course.trainer_id;
+        
+        // Check if there are no courseTrainers
+        let hasNoCourseTrainers = true;
+        if (courseAny.courseTrainers) {
+          if (Array.isArray(courseAny.courseTrainers)) {
+            hasNoCourseTrainers = courseAny.courseTrainers.length === 0;
+          } else {
+            hasNoCourseTrainers = false;
+          }
+        }
+        
+        // Check if there's no trainer object
+        const hasNoTrainer = !courseAny.trainer;
+        
+        // Course has no trainer if: trainer_id is null AND no courseTrainers AND no trainer object
+        return hasNoTrainerId && hasNoCourseTrainers && hasNoTrainer;
+      });
     }
 
     setFilteredCourses(filtered);
@@ -375,7 +404,18 @@ export const EnhancedCoursesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800">Courses Management</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Courses Management</h1>
+          <p className="text-gray-600 mt-1">
+            {loading ? (
+              'Loading...'
+            ) : (
+              <>
+                {filteredCourses.length} {filterWithoutTrainer ? 'courses without trainer' : 'total'} courses
+              </>
+            )}
+          </p>
+        </div>
         <Button variant="primary" onClick={() => setMode('create')}>
           <Plus size={18} className="mr-2" />
           Add Course
@@ -411,6 +451,15 @@ export const EnhancedCoursesPage: React.FC = () => {
               { value: 'DENIED', label: 'Denied' },
             ]}
           />
+          <label className="flex items-center gap-2 cursor-pointer px-3 py-2 border border-gray-300 rounded hover:bg-gray-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={filterWithoutTrainer}
+              onChange={(e) => setFilterWithoutTrainer(e.target.checked)}
+              className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+            />
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Without Trainer</span>
+          </label>
         </div>
       </Card>
 
