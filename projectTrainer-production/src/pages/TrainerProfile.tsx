@@ -79,6 +79,11 @@ export function TrainerProfile() {
         fetchPastClients(user.id)
       ]);
 
+      // Set email from user if trainer doesn't have it
+      if (trainerData && user?.email && !trainerData.email) {
+        trainerData.email = user.email;
+      }
+
       setTrainer(trainerData);
       setOriginalTrainer(trainerData);
       setQualifications(quals);
@@ -97,7 +102,13 @@ export function TrainerProfile() {
   const handleUpdatePersonalInfo = async () => {
     if (!user?.id || !trainer) return;
 
-    const validationErrors = validatePersonalInfo(trainer);
+    // Ensure email is set from user for validation
+    const trainerWithEmail = {
+      ...trainer,
+      email: user.email || trainer.email
+    };
+
+    const validationErrors = validatePersonalInfo(trainerWithEmail);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       alert('Please fix the validation errors before saving');
@@ -106,7 +117,9 @@ export function TrainerProfile() {
 
     setSaving(true);
     try {
-      await updateTrainerProfile(user.id, trainer);
+      // Exclude email from update since it's read-only
+      const { email, ...updateData } = trainer;
+      await updateTrainerProfile(user.id, updateData);
       alert('Personal information updated successfully');
       setIsEditingPersonal(false);
       setErrors({});
@@ -286,7 +299,7 @@ export function TrainerProfile() {
               <div>
                 <p className="font-semibold text-lg text-gray-900">{trainer.full_name || 'User'}</p>
                 <p className="text-sm text-gray-500">{trainer.custom_trainer_id}</p>
-                <p className="text-sm text-gray-600 mt-1">{trainer.email}</p>
+                <p className="text-sm text-gray-600 mt-1">{user?.email || trainer.email || 'No email'}</p>
               </div>
             </div>
 
@@ -322,23 +335,49 @@ export function TrainerProfile() {
                 placeholder="e.g., Malay, Chinese, Indian"
                 error={errors.race}
               />
-              <Input
-                label="Phone Number"
-                type="tel"
-                value={trainer.phone_number || ''}
-                onChange={(e) => handleFieldChange('phone_number', e.target.value)}
-                disabled={!isEditingPersonal}
-                placeholder="+60X-XXXX XXXX"
-                helperText="Format: +601-2345 6789"
-                error={errors.phone_number}
-              />
+              <div className="w-full">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10">
+                    <span className="text-xl">🇲🇾</span>
+                    <span className="text-gray-700 font-medium">+60</span>
+                  </div>
+                  <input
+                    type="tel"
+                    value={trainer.phone_number?.replace(/^\+60/, '') || ''}
+                    onChange={(e) => {
+                      // Only allow digits
+                      const digitsOnly = e.target.value.replace(/\D/g, '');
+                      // Store with +60 prefix
+                      handleFieldChange('phone_number', digitsOnly ? `+60${digitsOnly}` : '');
+                    }}
+                    disabled={!isEditingPersonal}
+                    placeholder="123456789"
+                    maxLength={10}
+                    className={`w-full pl-20 pr-4 py-2 border rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 ${
+                      errors.phone_number
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                    } ${!isEditingPersonal ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  />
+                </div>
+                {errors.phone_number && (
+                  <p className="mt-1 text-sm text-red-600">{errors.phone_number}</p>
+                )}
+                {!errors.phone_number && (
+                  <p className="mt-1 text-sm text-gray-500">Enter your phone number without +60 prefix</p>
+                )}
+              </div>
               <Input
                 label="Email Address"
                 type="email"
-                value={trainer.email || ''}
-                onChange={(e) => handleFieldChange('email', e.target.value)}
-                disabled={!isEditingPersonal}
+                value={user?.email || trainer.email || ''}
+                onChange={() => {}} // No-op since disabled
+                disabled={true}
                 required
+                helperText="Email cannot be changed. This is your signup email."
                 error={errors.email}
               />
               <Input

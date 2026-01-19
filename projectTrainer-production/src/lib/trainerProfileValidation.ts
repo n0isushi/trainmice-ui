@@ -27,12 +27,10 @@ export function validatePersonalInfo(trainer: Partial<Trainer>): ValidationError
   }
 
   if (trainer.phone_number && trainer.phone_number.trim()) {
-    const cleanPhone = trainer.phone_number.replace(/\s/g, '');
-    const phonePattern1 = /^\+60\d{1,2}-\d{8}$/;
-    const phonePattern2 = /^\+60\d{9,10}$/;
-
-    if (!phonePattern1.test(cleanPhone) && !phonePattern2.test(cleanPhone)) {
-      errors.phone_number = 'Phone format should be: +60X-XXXX XXXX or +60XXXXXXXXX';
+    // Phone should be +60 followed by 9-10 digits (no dashes or spaces)
+    const phonePattern = /^\+60\d{9,10}$/;
+    if (!phonePattern.test(trainer.phone_number)) {
+      errors.phone_number = 'Phone number must be +60 followed by 9-10 digits (e.g., +60123456789)';
     }
   }
 
