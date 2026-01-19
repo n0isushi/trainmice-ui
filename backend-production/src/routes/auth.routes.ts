@@ -6,7 +6,7 @@ import { generateToken } from '../utils/utils/jwt';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { generateTrainerId, generateAdminCode } from '../utils/utils/sequentialId';
 import { generateVerificationToken, getTokenExpiry, isTokenExpired } from '../utils/utils/verification';
-import { sendVerificationEmail, sendPasswordResetEmail, sendAdminWelcomeEmail } from '../utils/email';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email';
 import { isBlockedEmailDomain, isValidEmailFormat } from '../utils/utils/emailValidation';
 
 const router = express.Router();
