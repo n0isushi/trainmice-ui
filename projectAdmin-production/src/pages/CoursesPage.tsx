@@ -22,10 +22,11 @@ export const CoursesPage: React.FC = () => {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [viewingCourse, setViewingCourse] = useState<Course | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'denied'>('pending');
+  const [filterWithoutTrainer, setFilterWithoutTrainer] = useState<boolean>(false);
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, filterWithoutTrainer]);
 
   const fetchData = async () => {
     try {
@@ -52,7 +53,7 @@ export const CoursesPage: React.FC = () => {
       
       // Apply client-side filtering based on active tab
       if (activeTab === 'all') {
-        // Show all courses - no additional filtering
+        // Show all courses - no status filtering
       } else if (activeTab === 'pending') {
         // Only show PENDING_APPROVAL courses
         coursesData = coursesData.filter((c: Course) => 
@@ -70,6 +71,22 @@ export const CoursesPage: React.FC = () => {
         );
       }
 
+      // Apply "Without Trainer" filter if enabled
+      if (filterWithoutTrainer) {
+        coursesData = coursesData.filter((c: Course) => {
+          // Check if trainer_id is null
+          const hasNoTrainerId = !c.trainer_id;
+          const courseAny = c as any;
+          // Check if there are no courseTrainers
+          const hasNoCourseTrainers = !courseAny.courseTrainers || 
+            (Array.isArray(courseAny.courseTrainers) && courseAny.courseTrainers.length === 0);
+          // Check if there's no trainer object
+          const hasNoTrainer = !courseAny.trainer;
+          
+          return hasNoTrainerId && hasNoCourseTrainers && hasNoTrainer;
+        });
+      }
+
       setCourses(coursesData);
 
       // Build trainers map
@@ -79,9 +96,11 @@ export const CoursesPage: React.FC = () => {
       });
       setTrainers(trainersMap);
 
-      // Build course trainers map
+      // Build course trainers map from all courses (not filtered)
+      // This ensures we have trainer info for all courses regardless of filters
+      const allCoursesData = coursesResponse.courses || [];
       const courseTrainersMap: { [key: string]: string[] } = {};
-      for (const course of coursesData) {
+      for (const course of allCoursesData) {
         const courseAny = course as any;
         if (courseAny.createdByAdmin && courseAny.courseTrainers) {
           courseTrainersMap[course.id] = (courseAny.courseTrainers as any[]).map((ct: any) => ct.trainerId || ct.trainer?.id || '') || [];
@@ -285,7 +304,7 @@ export const CoursesPage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Courses</h1>
           <p className="text-gray-600 mt-1">
-            {courses.length} {activeTab === 'pending' ? 'pending approval' : activeTab === 'approved' ? 'approved' : activeTab === 'denied' ? 'denied' : 'total'} courses
+            {courses.length} {filterWithoutTrainer ? 'courses without trainer' : activeTab === 'pending' ? 'pending approval' : activeTab === 'approved' ? 'approved' : activeTab === 'denied' ? 'denied' : 'total'} courses
           </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
@@ -294,8 +313,8 @@ export const CoursesPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="border-b border-gray-200 mb-6">
+      {/* Status Tabs Navigation */}
+      <div className="border-b border-gray-200 mb-4">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('all')}
@@ -338,6 +357,19 @@ export const CoursesPage: React.FC = () => {
             Denied
           </button>
         </nav>
+      </div>
+
+      {/* Additional Filters */}
+      <div className="mb-6 flex items-center gap-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filterWithoutTrainer}
+            onChange={(e) => setFilterWithoutTrainer(e.target.checked)}
+            className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Without Trainer</span>
+        </label>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
