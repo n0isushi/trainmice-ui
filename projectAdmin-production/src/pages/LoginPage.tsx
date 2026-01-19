@@ -21,13 +21,21 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const { error: signInError } = await signIn(email, password);
+      const { error: signInError, data } = await signIn(email, password);
       if (signInError) {
         setError(signInError.message);
+        setLoading(false);
+      } else if (data) {
+        // The signIn function already sets the user state in useAuth
+        // Dispatch event to notify App component to re-render
+        // Use requestAnimationFrame to ensure state update is processed first
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('auth:login-success'));
+        });
+        setLoading(false);
       }
     } catch (err) {
       setError('An unexpected error occurred');
-    } finally {
       setLoading(false);
     }
   };
