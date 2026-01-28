@@ -58,6 +58,10 @@ export const EnhancedCoursesPage: React.FC = () => {
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  // Brochure preview & edit (does NOT write back to DB)
+  const [showBrochureModal, setShowBrochureModal] = useState(false);
+  const [brochureData, setBrochureData] = useState<any | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -540,48 +544,35 @@ export const EnhancedCoursesPage: React.FC = () => {
                       try {
                         const courseData = await apiClient.getAdminCourse(course.id);
                         const fullCourse = courseData.course;
-                        
-                        // Debug: Log the course data to see what's available
-                        console.log('Full course data:', fullCourse);
-                        console.log('Learning Objectives:', fullCourse.learningObjectives);
-                        console.log('Learning Outcomes:', fullCourse.learningOutcomes);
-                        console.log('Schedule:', fullCourse.courseSchedule);
-                        
-                        // Helper function to extract and parse JSON fields
-                        const extractJsonField = (obj: any, camelKey: string, snakeKey: string): any[] => {
-                          // Try camelCase first
-                          let value = obj?.[camelKey];
-                          if (!value) {
-                            // Try snake_case
-                            value = obj?.[snakeKey];
-                          }
-                          
-                          // If still not found, try from the course object (fallback)
+
+                        // Helper function to extract and parse JSON/text fields into string arrays
+                        const extractJsonField = (obj: any, camelKey: string, snakeKey: string): string[] => {
+                          let value = obj?.[camelKey] ?? obj?.[snakeKey];
+
                           if (!value && course) {
                             const courseAny = course as any;
-                            value = courseAny[camelKey] || courseAny[snakeKey];
+                            value = courseAny[camelKey] ?? courseAny[snakeKey];
                           }
-                          
-                          // Parse if it's a string
+
                           if (typeof value === 'string') {
                             try {
                               value = JSON.parse(value);
                             } catch {
-                              // If parsing fails, try splitting by newlines
                               value = value.split('\n').filter((s: string) => s.trim());
                             }
                           }
-                          
-                          // Return as array
+
                           if (Array.isArray(value)) {
-                            return value.filter(item => item && item.trim && item.trim());
+                            return value
+                              .map((item) => (typeof item === 'string' ? item : String(item)))
+                              .filter((item) => item && item.trim());
                           }
                           if (value) {
                             return [String(value)];
                           }
                           return [];
                         };
-                        
+
                         // Extract courseType as string (take first if array)
                         const getCourseType = (): string => {
                           if (Array.isArray(fullCourse.courseType) && fullCourse.courseType.length > 0) {
@@ -598,28 +589,140 @@ export const EnhancedCoursesPage: React.FC = () => {
                           }
                           return 'IN_HOUSE';
                         };
-                        
-                        await generateCourseBrochure({
+
+                        // Try to fetch primary trainer details (for trainer profile section)
+                        let trainerName: string | null = null;
+                        let trainerProfessionalBio: string | null = null;
+                        let trainerEducation: string[] = [];
+                        let trainerWorkHistory: string[] = [];
+                        let trainerQualifications: string[] = [];
+                        let trainerLanguages: string[] = [];
+
+                        // Determine primary trainer id from course
+                        const primaryTrainerId: string | null =
+                          fullCourse.trainerId ||
+                          (fullCourse.trainer && fullCourse.trainer.id) ||
+                          (fullCourse.courseTrainers && fullCourse.courseTrainers.length > 0
+                            ? fullCourse.courseTrainers[0].trainerId
+                            : null);
+
+                        if (primaryTrainerId) {
+                          try {
+                            const trainerRes = await apiClient.getTrainer(primaryTrainerId);
+                            const trainer = trainerRes.trainer;
+                            trainerName = trainer.fullName || trainer.name || null;
+                            trainerProfessionalBio =
+                              trainer.professionalBio ||
+                              trainer.bio ||
+                              trainer.profileSummary ||
+                              null;
+
+                            // Education from qualifications
+                            if (Array.isArray(trainer.qualifications)) {
+                              trainerEducation = trainer.qualifications.map((q: any) => {
+                                const parts: string[] = [];
+                                if (q.title) parts.push(q.title);
+                                if (q.institution) parts.push(q.institution);
+                                if (q.yearObtained || q.year_obtained) {
+                                  parts.push(String(q.yearObtained || q.year_obtained));
+                                }
+                                return parts.join(' - ');
+                              }).filter((s: string) => s && s.trim());
+
+                              trainerQualifications = trainerEducation;
+                            }
+
+                            // Work history
+                            if (Array.isArray(trainer.workHistoryEntries)) {
+                              trainerWorkHistory = trainer.workHistoryEntries.map((w: any) => {
+                                const parts: string[] = [];
+                                if (w.position) parts.push(w.position);
+                                if (w.company) parts.push(w.company);
+                                if (w.startDate || w.start_date) {
+                                  const start = (w.startDate || w.start_date) as string;
+                                  const end = (w.endDate || w.end_date) as string | null;
+                                  parts.push(end ? `${start} - ${end}` : `${start} - Present`);
+                                }
+                                return parts.join(' | ');
+                              }).filter((s: string) => s && s.trim());
+                            }
+
+                            // Languages (support a few possible field names / formats)
+                            const rawLang =
+                              trainer.languagesSpoken ||
+                              trainer.languageSpoken ||
+                              trainer.languages ||
+                              trainer.spokenLanguages ||
+                              null;
+                            if (Array.isArray(rawLang)) {
+                              trainerLanguages = rawLang
+                                .map((l: any) => (typeof l === 'string' ? l : String(l)))
+                                .filter((l: string) => l && l.trim());
+                            } else if (typeof rawLang === 'string') {
+                              try {
+                                const parsed = JSON.parse(rawLang);
+                                if (Array.isArray(parsed)) {
+                                  trainerLanguages = parsed
+                                    .map((l: any) => (typeof l === 'string' ? l : String(l)))
+                                    .filter((l: string) => l && l.trim());
+                                } else {
+                                  trainerLanguages = rawLang
+                                    .split(',')
+                                    .map((l: string) => l.trim())
+                                    .filter(Boolean);
+                                }
+                              } catch {
+                                trainerLanguages = rawLang
+                                  .split(',')
+                                  .map((l: string) => l.trim())
+                                  .filter(Boolean);
+                              }
+                            }
+                          } catch (trainerError) {
+                            console.warn('Could not load trainer details for brochure:', trainerError);
+                          }
+                        }
+
+                        // Prepare editable brochure data (course + trainer profile)
+                        const draftData: any = {
                           title: fullCourse.title || course.title,
                           courseType: getCourseType(),
                           startDate: fullCourse.startDate || course.start_date,
                           endDate: fullCourse.endDate || course.end_date,
                           venue: fullCourse.venue || course.venue,
                           description: fullCourse.description || course.description,
-                          learningObjectives: extractJsonField(fullCourse, 'learningObjectives', 'learning_objectives'),
-                          learningOutcomes: extractJsonField(fullCourse, 'learningOutcomes', 'learning_outcomes'),
-                          targetAudience: fullCourse.targetAudience || (course as any).target_audience || null,
+                          learningObjectives: extractJsonField(
+                            fullCourse,
+                            'learningObjectives',
+                            'learning_objectives'
+                          ),
+                          learningOutcomes: extractJsonField(
+                            fullCourse,
+                            'learningOutcomes',
+                            'learning_outcomes'
+                          ),
+                          targetAudience:
+                            fullCourse.targetAudience || (course as any).target_audience || null,
                           methodology: fullCourse.methodology || null,
                           hrdcClaimable: fullCourse.hrdcClaimable || course.hrdc_claimable,
                           schedule: fullCourse.courseSchedule || [],
-                        });
-                        showToast('Brochure generated successfully', 'success');
+                          // Trainer profile (can be edited in modal, not saved to DB)
+                          trainerName,
+                          trainerProfessionalBio,
+                          trainerEducation,
+                          trainerWorkHistory,
+                          trainerQualifications,
+                          trainerLanguages,
+                        };
+
+                        setBrochureData(draftData);
+                        setShowBrochureModal(true);
                       } catch (error: any) {
-                        console.error('Error generating brochure:', error);
-                        showToast(error.message || 'Error generating brochure', 'error');
+                        console.error('Error preparing brochure preview:', error);
+                        showToast(error.message || 'Error preparing brochure preview', 'error');
                       }
                     }}
-                    title="Generate Brochure"
+                    title="Preview & Download Brochure"
                   >
                     <Download size={14} />
                   </Button>
@@ -1152,6 +1255,227 @@ export const EnhancedCoursesPage: React.FC = () => {
             ))
           )}
         </div>
+      </Modal>
+
+      {/* Brochure Preview & Edit Modal (does NOT persist to database) */}
+      <Modal
+        isOpen={showBrochureModal}
+        onClose={() => {
+          setShowBrochureModal(false);
+          setBrochureData(null);
+        }}
+        title="Preview & Edit Brochure Content"
+        size="xl"
+      >
+        {brochureData && (
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Course details */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">Course Details</h3>
+                <Input
+                  label="Course Title"
+                  value={brochureData.title || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({ ...prev, title: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Course Type"
+                  value={brochureData.courseType || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({ ...prev, courseType: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Venue"
+                  value={brochureData.venue || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({ ...prev, venue: e.target.value }))
+                  }
+                />
+                <Textarea
+                  label="Introduction / Description"
+                  rows={4}
+                  value={brochureData.description || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({ ...prev, description: e.target.value }))
+                  }
+                />
+                <Textarea
+                  label="Learning Objectives (one per line)"
+                  rows={4}
+                  value={(brochureData.learningObjectives || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      learningObjectives: lines,
+                    }));
+                  }}
+                />
+                <Textarea
+                  label="Learning Outcomes (one per line)"
+                  rows={4}
+                  value={(brochureData.learningOutcomes || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      learningOutcomes: lines,
+                    }));
+                  }}
+                />
+                <Textarea
+                  label="Target Audience"
+                  rows={3}
+                  value={brochureData.targetAudience || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      targetAudience: e.target.value,
+                    }))
+                  }
+                />
+                <Textarea
+                  label="Methodology"
+                  rows={3}
+                  value={brochureData.methodology || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      methodology: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              {/* Trainer profile details */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">Trainer Profile (Brochure Only)</h3>
+                <Input
+                  label="Trainer Name"
+                  value={brochureData.trainerName || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerName: e.target.value,
+                    }))
+                  }
+                />
+                <Textarea
+                  label="Professional Bio"
+                  rows={4}
+                  value={brochureData.trainerProfessionalBio || ''}
+                  onChange={(e) =>
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerProfessionalBio: e.target.value,
+                    }))
+                  }
+                />
+                <Textarea
+                  label="Education (one per line)"
+                  rows={3}
+                  value={(brochureData.trainerEducation || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerEducation: lines,
+                    }));
+                  }}
+                />
+                <Textarea
+                  label="Work History (one role per line)"
+                  rows={3}
+                  value={(brochureData.trainerWorkHistory || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerWorkHistory: lines,
+                    }));
+                  }}
+                />
+                <Textarea
+                  label="Qualifications & Certifications (one per line)"
+                  rows={3}
+                  value={(brochureData.trainerQualifications || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerQualifications: lines,
+                    }));
+                  }}
+                />
+                <Input
+                  label="Languages Spoken (comma separated)"
+                  value={(brochureData.trainerLanguages || []).join(', ')}
+                  onChange={(e) => {
+                    const langs = e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setBrochureData((prev: any) => ({
+                      ...prev,
+                      trainerLanguages: langs,
+                    }));
+                  }}
+                />
+                <p className="text-xs text-gray-500">
+                  Changes here are only for this brochure download and will not update the course or trainer records.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowBrochureModal(false);
+                  setBrochureData(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  if (!brochureData) return;
+                  try {
+                    await generateCourseBrochure(brochureData);
+                    showToast('Brochure downloaded successfully', 'success');
+                    setShowBrochureModal(false);
+                    setBrochureData(null);
+                  } catch (error: any) {
+                    console.error('Error generating brochure:', error);
+                    showToast(error.message || 'Error generating brochure', 'error');
+                  }
+                }}
+              >
+                <Download size={16} className="mr-2" />
+                Download Brochure
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -24,6 +24,13 @@ interface CourseData {
     moduleTitle: string; // Now a string (one module per row)
     submoduleTitle?: string[] | null; // JSON array of submodules
   }>;
+  // Trainer details (brochure-only, does NOT change database)
+  trainerName?: string | null;
+  trainerProfessionalBio?: string | null;
+  trainerEducation?: string[] | null;
+  trainerWorkHistory?: string[] | null;
+  trainerQualifications?: string[] | null;
+  trainerLanguages?: Array<string> | null;
 }
 
 export const generateCourseBrochure = async (course: CourseData) => {
@@ -481,9 +488,12 @@ export const generateCourseBrochure = async (course: CourseData) => {
         // Display all modules for this session
         for (const item of session.items) {
           // Module title (now a string, not array)
-          const moduleTitle = typeof item.moduleTitle === 'string' 
-            ? item.moduleTitle 
-            : (Array.isArray(item.moduleTitle) ? item.moduleTitle.join(', ') : '');
+          const moduleTitle =
+            typeof item.moduleTitle === 'string'
+              ? item.moduleTitle
+              : Array.isArray(item.moduleTitle)
+                ? (item.moduleTitle as any[]).join(', ')
+                : '';
           
           if (moduleTitle) {
             doc.setFont('helvetica', 'bold');
@@ -524,6 +534,112 @@ export const generateCourseBrochure = async (course: CourseData) => {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
     doc.text('Schedule to be announced', pageWidth / 2, currentY + 20, { align: 'center' });
+  }
+
+  // ============================================================================
+  // TRAINER PROFILE (separate page)
+  // ============================================================================
+  doc.addPage();
+  await applySecondPageBackground();
+
+  currentY = margin;
+
+  doc.setTextColor(0, 51, 102);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TRAINER PROFILE', pageWidth / 2, currentY, { align: 'center' });
+  currentY += 18;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+
+  // Trainer name
+  if (course.trainerName) {
+    doc.setFont('helvetica', 'bold');
+    currentY = await addText(course.trainerName, margin, currentY, contentWidth, 12, 'bold');
+    currentY += 6;
+  }
+
+  // Professional Bio
+  currentY = await checkPageBreak(currentY, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Professional Bio:', margin, currentY);
+  currentY += 7;
+  doc.setFont('helvetica', 'normal');
+  if (course.trainerProfessionalBio) {
+    currentY = await addText(course.trainerProfessionalBio, margin, currentY, contentWidth, 10);
+  } else {
+    doc.text('N/A', margin, currentY);
+    currentY += 6;
+  }
+  currentY += 10;
+
+  // Education
+  currentY = await checkPageBreak(currentY, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Education:', margin, currentY);
+  currentY += 7;
+  doc.setFont('helvetica', 'normal');
+  if (course.trainerEducation && course.trainerEducation.length > 0) {
+    for (const edu of course.trainerEducation) {
+      currentY = await checkPageBreak(currentY, 12);
+      currentY = await addText(`• ${edu}`, margin + 2, currentY, contentWidth - 2, 10);
+      currentY += 2;
+    }
+  } else {
+    doc.text('N/A', margin + 2, currentY);
+    currentY += 6;
+  }
+  currentY += 10;
+
+  // Work History
+  currentY = await checkPageBreak(currentY, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Work History:', margin, currentY);
+  currentY += 7;
+  doc.setFont('helvetica', 'normal');
+  if (course.trainerWorkHistory && course.trainerWorkHistory.length > 0) {
+    for (const work of course.trainerWorkHistory) {
+      currentY = await checkPageBreak(currentY, 12);
+      currentY = await addText(`• ${work}`, margin + 2, currentY, contentWidth - 2, 10);
+      currentY += 2;
+    }
+  } else {
+    doc.text('N/A', margin + 2, currentY);
+    currentY += 6;
+  }
+  currentY += 10;
+
+  // Qualifications
+  currentY = await checkPageBreak(currentY, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Qualifications & Certifications:', margin, currentY);
+  currentY += 7;
+  doc.setFont('helvetica', 'normal');
+  if (course.trainerQualifications && course.trainerQualifications.length > 0) {
+    for (const qual of course.trainerQualifications) {
+      currentY = await checkPageBreak(currentY, 12);
+      currentY = await addText(`• ${qual}`, margin + 2, currentY, contentWidth - 2, 10);
+      currentY += 2;
+    }
+  } else {
+    doc.text('N/A', margin + 2, currentY);
+    currentY += 6;
+  }
+  currentY += 10;
+
+  // Languages Spoken
+  currentY = await checkPageBreak(currentY, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Languages Spoken:', margin, currentY);
+  currentY += 7;
+  doc.setFont('helvetica', 'normal');
+  if (course.trainerLanguages && course.trainerLanguages.length > 0) {
+    const languagesText = (course.trainerLanguages as any[]).join(', ');
+    currentY = await addText(languagesText, margin, currentY, contentWidth, 10);
+  } else {
+    doc.text('N/A', margin, currentY);
+    currentY += 6;
   }
 
   // Save the PDF
