@@ -591,7 +591,7 @@ export const EnhancedCoursesPage: React.FC = () => {
                         };
 
                         // Try to fetch primary trainer details (for trainer profile section)
-                        let trainerName: string | null = null;
+                        let trainerCustomId: string | null = null;
                         let trainerProfessionalBio: string | null = null;
                         let trainerEducation: string[] = [];
                         let trainerWorkHistory: string[] = [];
@@ -610,7 +610,7 @@ export const EnhancedCoursesPage: React.FC = () => {
                           try {
                             const trainerRes = await apiClient.getTrainer(primaryTrainerId);
                             const trainer = trainerRes.trainer;
-                            trainerName = trainer.fullName || trainer.name || null;
+                            trainerCustomId = trainer.customTrainerId || trainer.custom_trainer_id || null;
                             trainerProfessionalBio =
                               trainer.professionalBio ||
                               trainer.bio ||
@@ -707,7 +707,7 @@ export const EnhancedCoursesPage: React.FC = () => {
                           hrdcClaimable: fullCourse.hrdcClaimable || course.hrdc_claimable,
                           schedule: fullCourse.courseSchedule || [],
                           // Trainer profile (can be edited in modal, not saved to DB)
-                          trainerName,
+                          trainerCustomId,
                           trainerProfessionalBio,
                           trainerEducation,
                           trainerWorkHistory,
@@ -1360,12 +1360,12 @@ export const EnhancedCoursesPage: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-800">Trainer Profile (Brochure Only)</h3>
                 <Input
-                  label="Trainer Name"
-                  value={brochureData.trainerName || ''}
+                  label="Trainer ID"
+                  value={brochureData.trainerCustomId || ''}
                   onChange={(e) =>
                     setBrochureData((prev: any) => ({
                       ...prev,
-                      trainerName: e.target.value,
+                      trainerCustomId: e.target.value,
                     }))
                   }
                 />

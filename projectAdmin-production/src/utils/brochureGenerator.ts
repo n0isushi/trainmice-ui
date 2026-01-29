@@ -25,7 +25,7 @@ interface CourseData {
     submoduleTitle?: string[] | null; // JSON array of submodules
   }>;
   // Trainer details (brochure-only, does NOT change database)
-  trainerName?: string | null;
+  trainerCustomId?: string | null;
   trainerProfessionalBio?: string | null;
   trainerEducation?: string[] | null;
   trainerWorkHistory?: string[] | null;
@@ -553,10 +553,13 @@ export const generateCourseBrochure = async (course: CourseData) => {
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
 
-  // Trainer name
-  if (course.trainerName) {
+  // Trainer ID
+  if (course.trainerCustomId) {
     doc.setFont('helvetica', 'bold');
-    currentY = await addText(course.trainerName, margin, currentY, contentWidth, 12, 'bold');
+    doc.text('Trainer ID:', margin, currentY);
+    currentY += 7;
+    doc.setFont('helvetica', 'normal');
+    currentY = await addText(course.trainerCustomId, margin, currentY, contentWidth, 10);
     currentY += 6;
   }
 
