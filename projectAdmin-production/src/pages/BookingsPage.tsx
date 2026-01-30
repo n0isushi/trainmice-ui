@@ -76,6 +76,16 @@ interface EventRegistration {
     companyEmail: string;
     contactNumber: string;
   };
+  clientsReference?: {
+    id: string;
+    companyName: string;
+    address: string;
+    state: string | null;
+    city: string | null;
+    picName: string;
+    email: string;
+    contactNumber: string;
+  };
 }
 
 type TabType = 'inhouse' | 'public' | 'booknow';
@@ -596,11 +606,16 @@ export const BookingsPage: React.FC = () => {
                               <div key={registration.id} className="bg-white rounded p-3 flex items-center justify-between">
                                 <div className="flex-1">
                                   <div className="font-medium text-gray-900">
-                                    {registration.client?.userName || registration.clientName || 'N/A'}
+                                    {registration.client?.userName || registration.clientName || registration.clientsReference?.picName || 'N/A'}
                                   </div>
                                   <div className="text-sm text-gray-600">
-                                    {registration.client?.companyEmail || registration.clientEmail || ''}
+                                    {registration.client?.companyEmail || registration.clientEmail || registration.clientsReference?.email || ''}
                                   </div>
+                                  {registration.clientsReference && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {registration.clientsReference.companyName}
+                                    </div>
+                                  )}
                                   <div className="flex items-center space-x-2 mt-1">
                                     <Badge variant="info" className="text-xs">
                                       {registration.numberOfParticipants || 1} participant{((registration.numberOfParticipants || 1) > 1) ? 's' : ''}

@@ -54,6 +54,18 @@ router.get('/registrations', async (req: AuthRequest, res: Response) => {
             contactNumber: true,
           },
         },
+        clientsReference: {
+          select: {
+            id: true,
+            companyName: true,
+            address: true,
+            state: true,
+            city: true,
+            picName: true,
+            email: true,
+            contactNumber: true,
+          },
+        },
       },
       orderBy: [
         { event: { eventDate: 'asc' } },
@@ -338,6 +350,148 @@ router.put(
     } catch (error: any) {
       console.error('Update event status error:', error);
       return res.status(500).json({ error: 'Failed to update event status', details: error.message });
+    }
+  }
+);
+
+// Add participants from new client (creates ClientsReference and EventRegistration)
+router.post(
+  '/:id/add-participants-new-client',
+  [
+    body('companyName').notEmpty().trim().withMessage('Company name is required'),
+    body('address').notEmpty().trim().withMessage('Address is required'),
+    body('state').optional().trim(),
+    body('city').optional().trim(),
+    body('picName').notEmpty().trim().withMessage('PIC name is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('contactNumber').notEmpty().trim().withMessage('Contact number is required'),
+    body('numberOfParticipants').isInt({ min: 1 }).withMessage('Number of participants must be a positive integer'),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id: eventId } = req.params;
+      const {
+        companyName,
+        address,
+        state,
+        city,
+        picName,
+        email,
+        contactNumber,
+        numberOfParticipants,
+      } = req.body;
+
+      const participantsNum = parseInt(String(numberOfParticipants));
+
+      // Validate event exists
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          title: true,
+          maxPacks: true,
+        },
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check event capacity
+      const existingRegistrations = await prisma.eventRegistration.findMany({
+        where: {
+          eventId: event.id,
+          status: {
+            in: ['REGISTERED', 'APPROVED'],
+          },
+        },
+        select: {
+          numberOfParticipants: true,
+        },
+      });
+
+      const totalParticipants = existingRegistrations.reduce(
+        (sum, reg) => sum + (reg.numberOfParticipants || 1),
+        0
+      );
+
+      if (event.maxPacks && totalParticipants + participantsNum > event.maxPacks) {
+        const availableSlots = event.maxPacks - totalParticipants;
+        return res.status(400).json({
+          error: `Not enough slots available. Requested: ${participantsNum}, Available: ${availableSlots}`,
+        });
+      }
+
+      // Create ClientsReference record
+      const clientsReference = await prisma.clientsReference.create({
+        data: {
+          companyName,
+          address,
+          state: state || null,
+          city: city || null,
+          picName,
+          email,
+          contactNumber,
+        },
+      });
+
+      // Create EventRegistration with APPROVED status
+      const registration = await prisma.eventRegistration.create({
+        data: {
+          eventId: event.id,
+          clientsReferenceId: clientsReference.id,
+          clientId: null, // Not a registered user
+          clientName: picName,
+          clientEmail: email,
+          numberOfParticipants: participantsNum,
+          status: 'APPROVED', // As per user requirement
+        },
+        include: {
+          clientsReference: {
+            select: {
+              id: true,
+              companyName: true,
+              address: true,
+              state: true,
+              city: true,
+              picName: true,
+              email: true,
+              contactNumber: true,
+            },
+          },
+          event: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
+      });
+
+      // Create activity log
+      await createActivityLog({
+        userId: req.user!.id,
+        actionType: 'CREATE',
+        entityType: 'event_registration',
+        entityId: registration.id,
+        description: `Added ${participantsNum} participant(s) from new client "${companyName}" (${picName}) to event: ${event.title}`,
+      });
+
+      return res.status(201).json({
+        registration,
+        message: `Successfully added ${participantsNum} participant(s) from ${companyName}`,
+      });
+    } catch (error: any) {
+      console.error('Add participants new client error:', error);
+      return res.status(500).json({
+        error: 'Failed to add participants',
+        details: error.message,
+      });
     }
   }
 );

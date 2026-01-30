@@ -7,9 +7,10 @@ import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { apiClient } from '../lib/api-client';
 import { formatDate } from '../utils/helpers';
-import { Calendar, MapPin, Users, Filter, X, MessageSquare } from 'lucide-react';
+import { Calendar, MapPin, Users, Filter, X, MessageSquare, UserPlus } from 'lucide-react';
 import { showToast } from '../components/common/Toast';
 import { FeedbackQRModal } from '../components/events/FeedbackQRModal';
+import { AddParticipantsModal } from '../components/events/AddParticipantsModal';
 import { Event } from '../types';
 
 export const EventsPage: React.FC = () => {
@@ -26,6 +27,8 @@ export const EventsPage: React.FC = () => {
   });
   const [selectedEventForQR, setSelectedEventForQR] = useState<Event | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedEventForParticipants, setSelectedEventForParticipants] = useState<Event | null>(null);
+  const [showAddParticipantsModal, setShowAddParticipantsModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -369,9 +372,20 @@ export const EventsPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="mt-4 pt-4 border-t">
+                <div className="mt-4 pt-4 border-t space-y-2">
                   <Button
                     variant="primary"
+                    onClick={() => {
+                      setSelectedEventForParticipants(event);
+                      setShowAddParticipantsModal(true);
+                    }}
+                    className="w-full"
+                  >
+                    <UserPlus size={16} className="mr-2" />
+                    Add Participants (New Client)
+                  </Button>
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       setSelectedEventForQR(event);
                       setShowQRModal(true);
@@ -397,6 +411,21 @@ export const EventsPage: React.FC = () => {
           }}
           eventId={selectedEventForQR.id}
           eventTitle={selectedEventForQR.title || selectedEventForQR.course?.title || 'Event'}
+        />
+      )}
+
+      {selectedEventForParticipants && (
+        <AddParticipantsModal
+          isOpen={showAddParticipantsModal}
+          onClose={() => {
+            setShowAddParticipantsModal(false);
+            setSelectedEventForParticipants(null);
+          }}
+          eventId={selectedEventForParticipants.id}
+          eventTitle={selectedEventForParticipants.title || selectedEventForParticipants.course?.title || 'Event'}
+          onSuccess={() => {
+            fetchEvents();
+          }}
         />
       )}
     </div>

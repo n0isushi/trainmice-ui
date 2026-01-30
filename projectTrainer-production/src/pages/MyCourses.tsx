@@ -14,7 +14,6 @@ import {
   saveCourseSchedule,
   fetchCourseSchedule,
   deleteCourse,
-  validateScheduleDuration,
   validateWordLimit,
   CourseFormData,
   ScheduleItemData
@@ -29,6 +28,8 @@ interface FormData {
   course_mode: string | null;
   category: string | null;
   certificate: string | null;
+  professional_development_points: string | null;
+  professional_development_points_other: string | null;
   assessment: boolean;
   description: string;
   learning_objectives: string[];
@@ -47,15 +48,17 @@ const initialFormData: FormData = {
   course_mode: null,
   category: null,
   certificate: null,
+  professional_development_points: null,
+  professional_development_points_other: null,
   assessment: false,
   description: '',
   learning_objectives: [''],
   learning_outcomes: [''],
   target_audience: '',
-      methodology: '',
-      prerequisite: '',
-      end_date: null
-    };
+  methodology: '',
+  prerequisite: '',
+  end_date: null
+};
 
 export function MyCourses() {
   const { user } = useAuth();
@@ -115,7 +118,9 @@ export function MyCourses() {
       target_audience: course.target_audience || '',
       methodology: course.methodology || '',
       prerequisite: course.prerequisite || '',
-      end_date: course.end_date || null
+      professional_development_points: course.professional_development_points || null,
+      professional_development_points_other: course.professional_development_points_other || null,
+      end_date: null // end_date is not stored in Course, it's calculated from duration
     });
 
     try {
@@ -304,6 +309,8 @@ export function MyCourses() {
         course_mode: formData.course_mode,
         category: formData.category,
         certificate: formData.certificate,
+        professional_development_points: formData.professional_development_points,
+        professional_development_points_other: formData.professional_development_points_other,
         assessment: formData.assessment,
         learning_objectives: formData.learning_objectives.filter(obj => obj.trim()),
         learning_outcomes: formData.learning_outcomes.filter(out => out.trim()),
@@ -345,7 +352,7 @@ export function MyCourses() {
             // Get module titles - use new array format if available, otherwise use single module_title
             const moduleTitles = (item as any).module_titles && Array.isArray((item as any).module_titles) 
               ? (item as any).module_titles.filter((m: string) => m && m.trim())
-              : (item.module_title && item.module_title.trim() ? [item.module_title] : []);
+              : (item.module_title && typeof item.module_title === 'string' && item.module_title.trim() ? [item.module_title] : []);
 
             // Only save if there's at least one module title
             if (moduleTitles.length > 0) {

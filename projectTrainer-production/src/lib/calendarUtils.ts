@@ -23,7 +23,6 @@ export function isToday(date: Date): boolean {
 }
 
 export function getDaysInMonth(year: number, month: number): Date[] {
-  const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const days: Date[] = [];
 

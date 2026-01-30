@@ -7,7 +7,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { TextareaWithLimit } from '../components/ui/TextareaWithLimit';
 import { Tabs } from '../components/ui/Tabs';
 import { TabPanel } from '../components/ui/TabPanel';
-import { User, Briefcase, Award, BookOpen, Plus, Edit2, Trash2, Save, X, Camera, AlertCircle, MapPin } from 'lucide-react';
+import { User, Briefcase, Award, Plus, Edit2, Trash2, Save, X, Camera, AlertCircle, MapPin } from 'lucide-react';
 import { validatePersonalInfo, isProfileComplete, ValidationErrors } from '../lib/trainerProfileValidation';
 import {
   fetchTrainerProfile,
@@ -21,23 +21,16 @@ import {
   updateWorkHistory,
   deleteWorkHistoryWithTrainerId,
   validateWorkHistoryLimit,
-  fetchCoursesConducted,
-  createCourseConducted,
-  updateCourseConducted,
-  deleteCourseConductedWithTrainerId,
   fetchPastClients,
   calculateDuration,
   formatQualificationType,
   getYearOptions
 } from '../lib/trainerProfileService';
-import { fetchTrainerCourses } from '../lib/courseService';
 import {
   Trainer,
   TrainerQualification,
   TrainerWorkHistory,
-  TrainerCourseConducted,
-  TrainerPastClient,
-  Course
+  TrainerPastClient
 } from '../types/database';
 import { MultiSelect } from '../components/ui/MultiSelect';
 import { PastClientsSection } from '../components/profile/PastClientsSection';
@@ -48,8 +41,6 @@ export function TrainerProfile() {
   const [trainer, setTrainer] = useState<Trainer | null>(null);
   const [qualifications, setQualifications] = useState<TrainerQualification[]>([]);
   const [workHistory, setWorkHistory] = useState<TrainerWorkHistory[]>([]);
-  const [coursesConducted, setCoursesConducted] = useState<TrainerCourseConducted[]>([]);
-  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
   const [pastClients, setPastClients] = useState<TrainerPastClient[]>([]);
 
   const [activeTab, setActiveTab] = useState<'personal' | 'professional' | 'other'>('personal');
@@ -70,12 +61,10 @@ export function TrainerProfile() {
 
     setLoading(true);
     try {
-      const [trainerData, quals, work, conducted, courses, clients] = await Promise.all([
+      const [trainerData, quals, work, clients] = await Promise.all([
         fetchTrainerProfile(user.id),
         fetchQualifications(user.id),
         fetchWorkHistory(user.id),
-        fetchCoursesConducted(user.id),
-        fetchTrainerCourses(user.id),
         fetchPastClients(user.id)
       ]);
 
@@ -88,8 +77,6 @@ export function TrainerProfile() {
       setOriginalTrainer(trainerData);
       setQualifications(quals);
       setWorkHistory(work);
-      setCoursesConducted(conducted);
-      setAvailableCourses(courses);
       setPastClients(clients);
     } catch (error) {
       console.error('Error loading profile data:', error);
@@ -425,13 +412,6 @@ export function TrainerProfile() {
 
           <WorkHistorySection
             workHistory={workHistory}
-            trainerId={user?.id || ''}
-            onUpdate={loadAllData}
-          />
-
-          <TrainingProgramsSection
-            coursesConducted={coursesConducted}
-            availableCourses={availableCourses}
             trainerId={user?.id || ''}
             onUpdate={loadAllData}
           />
@@ -869,227 +849,6 @@ function WorkHistorySection({
                       <Edit2 className="w-4 h-4" />
                     </Button>
                     <Button variant="outline" onClick={() => handleDelete(work.id)}>
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Training Programs Section Component
-function TrainingProgramsSection({
-  coursesConducted,
-  availableCourses,
-  trainerId,
-  onUpdate
-}: {
-  coursesConducted: TrainerCourseConducted[];
-  availableCourses: Course[];
-  trainerId: string;
-  onUpdate: () => void;
-}) {
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    course_id: '',
-    course_name: '',
-    date_conducted: '',
-    location: '',
-    participants_count: '',
-    notes: ''
-  });
-  const [saving, setSaving] = useState(false);
-
-  const resetForm = () => {
-    setFormData({
-      course_id: '',
-      course_name: '',
-      date_conducted: '',
-      location: '',
-      participants_count: '',
-      notes: ''
-    });
-    setIsAdding(false);
-    setEditingId(null);
-  };
-
-  const handleCourseSelect = (courseId: string) => {
-    const course = availableCourses.find(c => c.id === courseId);
-    if (course) {
-      setFormData({ ...formData, course_id: courseId, course_name: course.title });
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const data = {
-        ...formData,
-        trainer_id: trainerId,
-        participants_count: formData.participants_count ? Number(formData.participants_count) : null,
-        location: formData.location || null,
-        notes: formData.notes || null
-      };
-
-      if (editingId) {
-        await updateCourseConducted(editingId, { ...data, trainer_id: trainerId });
-      } else {
-        await createCourseConducted(data);
-      }
-      resetForm();
-      onUpdate();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to save course conducted');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEdit = (course: TrainerCourseConducted) => {
-    setFormData({
-      course_id: course.course_id,
-      course_name: course.course_name,
-      date_conducted: course.date_conducted,
-      location: course.location || '',
-      participants_count: course.participants_count?.toString() || '',
-      notes: course.notes || ''
-    });
-    setEditingId(course.id);
-    setIsAdding(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this training record?')) return;
-    try {
-      await deleteCourseConductedWithTrainerId(trainerId, id);
-      onUpdate();
-    } catch (error) {
-      alert('Failed to delete course conducted');
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Training Programs Conducted</h2>
-          </div>
-          {!isAdding && (
-            <Button variant="primary" onClick={() => setIsAdding(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Training Record
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isAdding && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium text-gray-900 mb-4">
-              {editingId ? 'Edit Training Record' : 'Add Training Record'}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Course *</label>
-                <select
-                  value={formData.course_id}
-                  onChange={(e) => handleCourseSelect(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                  disabled={editingId !== null}
-                >
-                  <option value="">-- Select a course --</option>
-                  {availableCourses.map(course => (
-                    <option key={course.id} value={course.id}>
-                      {course.id} - {course.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Input
-                label="Date Conducted *"
-                type="date"
-                value={formData.date_conducted}
-                onChange={(e) => setFormData({ ...formData, date_conducted: e.target.value })}
-                max={new Date().toISOString().split('T')[0]}
-                required
-              />
-              <Input
-                label="Location (Optional)"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="e.g., Kuala Lumpur"
-              />
-              <Input
-                label="Number of Participants (Optional)"
-                type="number"
-                min="0"
-                value={formData.participants_count}
-                onChange={(e) => setFormData({ ...formData, participants_count: e.target.value })}
-                placeholder="0"
-              />
-            </div>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-                maxLength={500}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Any additional notes about this training session..."
-              />
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button variant="outline" onClick={resetForm}>Cancel</Button>
-              <Button variant="primary" onClick={handleSave} disabled={saving || !formData.course_id || !formData.date_conducted}>
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {coursesConducted.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No training programs recorded yet</p>
-          ) : (
-            coursesConducted.map(course => (
-              <div key={course.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                        {course.course_id}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {new Date(course.date_conducted).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h4 className="font-medium text-gray-900">{course.course_name}</h4>
-                    {(course.location || course.participants_count) && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        {course.location && `Location: ${course.location}`}
-                        {course.location && course.participants_count && ' | '}
-                        {course.participants_count && `Participants: ${course.participants_count}`}
-                      </p>
-                    )}
-                    {course.notes && (
-                      <p className="text-sm text-gray-500 mt-1 italic">{course.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleEdit(course)}>
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" onClick={() => handleDelete(course.id)}>
                       <Trash2 className="w-4 h-4 text-red-600" />
                     </Button>
                   </div>

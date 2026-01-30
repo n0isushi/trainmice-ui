@@ -274,22 +274,42 @@ model Event {
 }
 
 model EventRegistration {
-  id                   String   @id @default(uuid())
-  eventId              String   @map("event_id")
-  clientId             String?  @map("client_id")
-  clientName           String?  @map("client_name")
-  clientEmail          String?  @map("client_email")
-  packNumber           Int?     @map("pack_number")
-  numberOfParticipants Int      @default(1) @map("number_of_participants")
-  status               String   @default("REGISTERED")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-  client               Client?  @relation(fields: [clientId], references: [id])
-  event                Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id                   String           @id @default(uuid())
+  eventId              String           @map("event_id")
+  clientId             String?          @map("client_id")
+  clientName           String?          @map("client_name")
+  clientEmail          String?          @map("client_email")
+  clientsReferenceId   String?          @map("clients_reference_id")
+  packNumber           Int?             @map("pack_number")
+  numberOfParticipants Int              @default(1) @map("number_of_participants")
+  status               String           @default("REGISTERED")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  client               Client?          @relation(fields: [clientId], references: [id])
+  clientsReference     ClientsReference? @relation(fields: [clientsReferenceId], references: [id])
+  event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
   @@index([clientId])
+  @@index([clientsReferenceId])
   @@map("event_registrations")
+}
+
+model ClientsReference {
+  id            String              @id @default(uuid())
+  companyName   String              @map("company_name")
+  address       String              @db.Text
+  state         String?
+  city          String?
+  picName       String              @map("pic_name")
+  email         String
+  contactNumber String              @map("contact_number")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  registrations EventRegistration[]
+
+  @@index([email])
+  @@index([companyName])
+  @@map("clients_reference")
 }
 
 model TrainerAvailability {

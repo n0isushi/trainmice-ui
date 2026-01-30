@@ -280,6 +280,25 @@ export class ApiClient {
     return this.put<{ registration: any; message: string }>(`/admin/events/registrations/${id}/cancel`);
   }
 
+  async addParticipantsNewClient(
+    eventId: string,
+    data: {
+      companyName: string;
+      address: string;
+      state?: string;
+      city?: string;
+      picName: string;
+      email: string;
+      contactNumber: string;
+      numberOfParticipants: number;
+    }
+  ) {
+    return this.post<{ registration: any; message: string }>(
+      `/admin/events/${eventId}/add-participants-new-client`,
+      data
+    );
+  }
+
   async updateEventStatus(id: string, status: string) {
     return this.put<{ event: any; message: string }>(`/admin/events/${id}/status`, { status });
   }
