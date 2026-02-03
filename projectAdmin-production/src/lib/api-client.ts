@@ -519,6 +519,16 @@ export class ApiClient {
     return this.put<{ trainer: any; message: string }>(`/admin/trainers/${trainerId}/hrdc/verify`, data);
   }
 
+  async createTrainerAvailability(
+    trainerId: string,
+    data: { dates: string[]; status: 'AVAILABLE' | 'NOT_AVAILABLE' }
+  ) {
+    return this.post<{ availability: any[]; message: string }>(
+      `/admin/trainers/${trainerId}/availability/create`,
+      data
+    );
+  }
+
   async blockTrainerAvailability(trainerId: string, data: { blockedDate: string; reason?: string }) {
     return this.post<{ blocked: any; message: string }>(`/admin/trainers/${trainerId}/availability/block`, data);
   }
@@ -534,6 +544,12 @@ export class ApiClient {
     return this.get<{ availability: any[] }>(
       `/availability/trainer/${trainerId}`,
       params
+    );
+  }
+
+  async getTrainerBlockedDays(trainerId: string) {
+    return this.get<{ blockedDays: number[] }>(
+      `/availability/trainer/${trainerId}/blocked-days`
     );
   }
 

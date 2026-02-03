@@ -132,6 +132,85 @@ router.put(
   }
 );
 
+// Create trainer availability (admin only)
+router.post(
+  '/:id/availability/create',
+  [
+    body('dates').isArray().notEmpty(),
+    body('dates.*').isISO8601(),
+    body('status').isIn(['AVAILABLE', 'NOT_AVAILABLE']),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { dates, status } = req.body;
+      const trainerId = req.params.id;
+
+      // Verify trainer exists
+      const trainer = await prisma.trainer.findUnique({
+        where: { id: trainerId },
+      });
+
+      if (!trainer) {
+        return res.status(404).json({ error: 'Trainer not found' });
+      }
+
+      // Process each date: create if doesn't exist, update if exists
+      const results = await Promise.all(
+        dates.map(async (dateStr: string) => {
+          const targetDate = new Date(dateStr);
+          targetDate.setHours(0, 0, 0, 0);
+
+          // Check if availability record already exists for this date
+          const existing = await prisma.trainerAvailability.findFirst({
+            where: {
+              trainerId,
+              date: targetDate,
+            },
+          });
+
+          if (existing) {
+            // Update existing record
+            return prisma.trainerAvailability.update({
+              where: { id: existing.id },
+              data: { status: status as any },
+            });
+          } else {
+            // Create new record
+            return prisma.trainerAvailability.create({
+              data: {
+                trainerId,
+                date: targetDate,
+                status: status as any,
+              },
+            });
+          }
+        })
+      );
+
+      await createActivityLog({
+        userId: req.user!.id,
+        actionType: 'UPDATE',
+        entityType: 'trainer',
+        entityId: trainerId,
+        description: `Created/updated trainer availability for ${dates.length} date(s) with status ${status}`,
+      });
+
+      return res.json({
+        availability: results,
+        message: `Availability created/updated successfully for ${dates.length} date(s)`,
+      });
+    } catch (error: any) {
+      console.error('Create availability error:', error);
+      return res.status(500).json({ error: 'Failed to create availability', details: error.message });
+    }
+  }
+);
+
 // Block trainer availability manually
 router.post(
   '/:id/availability/block',

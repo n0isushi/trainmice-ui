@@ -7,9 +7,10 @@ import { Modal } from '../components/common/Modal';
 import { Badge } from '../components/common/Badge';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { TrainerForm } from '../components/trainers/TrainerForm';
+import { TrainerCalendarView } from '../components/trainers/TrainerCalendarView';
 import { apiClient } from '../lib/api-client';
 import { Trainer } from '../types';
-import { Plus, Edit, Trash2, Phone, MapPin, Filter, Calendar, BarChart3, X, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, MapPin, Filter, Calendar, BarChart3, X, CheckCircle, Eye } from 'lucide-react';
 import { showToast } from '../components/common/Toast';
 
 interface TrainerAnalytics {
@@ -31,9 +32,11 @@ export const EnhancedTrainersPage: React.FC = () => {
   const [showHRDCModal, setShowHRDCModal] = useState(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<Trainer | null>(null);
   const [selectedTrainer, setSelectedTrainer] = useState<Trainer | null>(null);
+  const [selectedTrainerForCalendar, setSelectedTrainerForCalendar] = useState<Trainer | null>(null);
   const [analytics, setAnalytics] = useState<TrainerAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
@@ -59,10 +62,11 @@ export const EnhancedTrainersPage: React.FC = () => {
     verified: false,
   });
 
-  // Block availability form
-  const [blockForm, setBlockForm] = useState({
-    blockedDate: '',
-    reason: '',
+  // Create availability form
+  const [availabilityForm, setAvailabilityForm] = useState({
+    startDate: '',
+    endDate: '',
+    status: 'AVAILABLE' as 'AVAILABLE' | 'NOT_AVAILABLE',
   });
 
   useEffect(() => {
@@ -190,20 +194,44 @@ export const EnhancedTrainersPage: React.FC = () => {
     }
   };
 
-  const handleBlockAvailability = async () => {
-    if (!selectedTrainer || !blockForm.blockedDate) return;
+  const handleCreateAvailability = async () => {
+    if (!selectedTrainer || !availabilityForm.startDate || !availabilityForm.endDate) return;
 
     try {
-      await apiClient.blockTrainerAvailability(selectedTrainer.id, {
-        blockedDate: blockForm.blockedDate,
-        reason: blockForm.reason,
+      // Generate array of dates from startDate to endDate
+      const dates: string[] = [];
+      const start = new Date(availabilityForm.startDate);
+      const end = new Date(availabilityForm.endDate);
+      
+      // Ensure end date is after start date
+      if (end < start) {
+        showToast('End date must be after start date', 'error');
+        return;
+      }
+
+      const current = new Date(start);
+      while (current <= end) {
+        dates.push(formatDate(current));
+        current.setDate(current.getDate() + 1);
+      }
+
+      await apiClient.createTrainerAvailability(selectedTrainer.id, {
+        dates,
+        status: availabilityForm.status,
       });
-      showToast('Availability blocked successfully', 'success');
+      showToast(`Availability created successfully for ${dates.length} date(s)`, 'success');
       setShowBlockModal(false);
-      setBlockForm({ blockedDate: '', reason: '' });
+      setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
     } catch (error: any) {
-      showToast(error.message || 'Error blocking availability', 'error');
+      showToast(error.message || 'Error creating availability', 'error');
     }
+  };
+
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const handleViewAnalytics = async (trainer: Trainer) => {
@@ -481,11 +509,22 @@ export const EnhancedTrainersPage: React.FC = () => {
                           variant="secondary"
                           size="sm"
                           onClick={() => {
+                            setSelectedTrainerForCalendar(trainer);
+                            setShowCalendarModal(true);
+                          }}
+                          title="View Calendar"
+                        >
+                          <Eye size={16} />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
                             setSelectedTrainer(trainer);
-                            setBlockForm({ blockedDate: '', reason: '' });
+                            setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
                             setShowBlockModal(true);
                           }}
-                          title="Block Availability"
+                          title="Create Availability"
                         >
                           <Calendar size={16} />
                         </Button>
@@ -597,35 +636,72 @@ export const EnhancedTrainersPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Block Availability Modal */}
-      <Modal isOpen={showBlockModal} onClose={() => setShowBlockModal(false)} title="Block Trainer Availability">
+      {/* Create Availability Modal */}
+      <Modal isOpen={showBlockModal} onClose={() => setShowBlockModal(false)} title="Create Availability for Trainer">
         <div className="space-y-4">
           <Input
-            label="Blocked Date *"
+            label="Start Date *"
             type="date"
-            value={blockForm.blockedDate}
-            onChange={(e) => setBlockForm({ ...blockForm, blockedDate: e.target.value })}
+            value={availabilityForm.startDate}
+            onChange={(e) => setAvailabilityForm({ ...availabilityForm, startDate: e.target.value })}
             required
           />
           <Input
-            label="Reason"
-            value={blockForm.reason}
-            onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
-            placeholder="Optional reason for blocking"
+            label="End Date *"
+            type="date"
+            value={availabilityForm.endDate}
+            onChange={(e) => setAvailabilityForm({ ...availabilityForm, endDate: e.target.value })}
+            required
+            min={availabilityForm.startDate}
           />
+          <Select
+            label="Status *"
+            value={availabilityForm.status}
+            onChange={(e) => setAvailabilityForm({ ...availabilityForm, status: e.target.value as 'AVAILABLE' | 'NOT_AVAILABLE' })}
+            options={[
+              { value: 'AVAILABLE', label: 'Available' },
+              { value: 'NOT_AVAILABLE', label: 'Not Available' },
+            ]}
+          />
+          <div className="text-sm text-gray-600">
+            <p>This will create availability records for all dates from start date to end date (inclusive).</p>
+            <p className="mt-1">If a date already has an availability record, it will be updated to the selected status.</p>
+          </div>
           <div className="flex justify-end space-x-3 pt-4">
             <Button variant="secondary" onClick={() => setShowBlockModal(false)}>
               Cancel
             </Button>
             <Button
               variant="primary"
-              onClick={handleBlockAvailability}
-              disabled={!blockForm.blockedDate}
+              onClick={handleCreateAvailability}
+              disabled={!availabilityForm.startDate || !availabilityForm.endDate}
             >
-              Block Availability
+              Create Availability
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Calendar View Modal */}
+      <Modal
+        isOpen={showCalendarModal}
+        onClose={() => {
+          setShowCalendarModal(false);
+          setSelectedTrainerForCalendar(null);
+        }}
+        title={selectedTrainerForCalendar ? `Calendar - ${selectedTrainerForCalendar.full_name}` : 'Trainer Calendar'}
+        size="xl"
+      >
+        {selectedTrainerForCalendar && (
+          <TrainerCalendarView
+            trainerId={selectedTrainerForCalendar.id}
+            trainerName={selectedTrainerForCalendar.full_name || 'Unknown'}
+            onClose={() => {
+              setShowCalendarModal(false);
+              setSelectedTrainerForCalendar(null);
+            }}
+          />
+        )}
       </Modal>
 
       {/* Analytics Modal */}
