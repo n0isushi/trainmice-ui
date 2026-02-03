@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '../common/Input';
-import { Select } from '../common/Select';
 import { Button } from '../common/Button';
-import { Card } from '../common/Card';
 import { Course } from '../../types';
 import { apiClient } from '../../lib/api-client';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -34,7 +32,7 @@ export const EventCreationForm: React.FC<EventCreationFormProps> = ({
   const calculateDaysNeeded = (): number => {
     if (!course.duration_hours || course.duration_hours <= 0) return 1;
     
-    const unit = (course.duration_unit || 'hours').toLowerCase();
+    const unit = ((course as any).duration_unit || 'hours').toLowerCase();
     
     if (unit === 'days') {
       return Math.ceil(course.duration_hours);
@@ -60,22 +58,22 @@ export const EventCreationForm: React.FC<EventCreationFormProps> = ({
   const trainerId = (course as any).trainer_id || (course as any).trainerId;
 
   // Get available course types and modes from the course
-  const courseCourseTypes = Array.isArray(course.courseType) 
-    ? course.courseType 
-    : (course.courseType ? [course.courseType] : []);
-  const courseTypeAlt = Array.isArray(course.course_type) 
-    ? course.course_type 
-    : (course.course_type ? [course.course_type] : []);
+  const courseCourseTypes = Array.isArray((course as any).courseType) 
+    ? (course as any).courseType 
+    : ((course as any).courseType ? [(course as any).courseType] : []);
+  const courseTypeAlt = Array.isArray((course as any).course_type) 
+    ? (course as any).course_type 
+    : ((course as any).course_type ? [(course as any).course_type] : []);
   const allCourseTypes = [...courseCourseTypes, ...courseTypeAlt].map(t => String(t).toUpperCase());
   const hasInHouse = allCourseTypes.includes('IN_HOUSE');
   const hasPublic = allCourseTypes.includes('PUBLIC');
   
-  const courseCourseModes = Array.isArray(course.courseMode) 
-    ? course.courseMode 
-    : (course.courseMode ? [course.courseMode] : []);
-  const courseModeAlt = Array.isArray(course.course_mode) 
-    ? course.course_mode 
-    : (course.course_mode ? [course.course_mode] : []);
+  const courseCourseModes = Array.isArray((course as any).courseMode) 
+    ? (course as any).courseMode 
+    : ((course as any).courseMode ? [(course as any).courseMode] : []);
+  const courseModeAlt = Array.isArray((course as any).course_mode) 
+    ? (course as any).course_mode 
+    : ((course as any).course_mode ? [(course as any).course_mode] : []);
   const allCourseModes = [...courseCourseModes, ...courseModeAlt].map(m => String(m).toUpperCase());
   const hasPhysical = allCourseModes.includes('PHYSICAL');
   const hasOnline = allCourseModes.includes('ONLINE');
@@ -159,7 +157,7 @@ export const EventCreationForm: React.FC<EventCreationFormProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (selectedAvailabilityIds.length !== daysNeeded) {
-      newErrors.availabilityIds = `Please select exactly ${daysNeeded} date(s) from trainer availability (based on course duration: ${course.duration_hours} ${course.duration_unit || 'hours'})`;
+      newErrors.availabilityIds = `Please select exactly ${daysNeeded} date(s) from trainer availability (based on course duration: ${course.duration_hours} ${(course as any).duration_unit || 'hours'})`;
     }
 
     if (!courseType) {
@@ -230,7 +228,7 @@ export const EventCreationForm: React.FC<EventCreationFormProps> = ({
           </p>
         )}
         <p className="text-sm text-blue-800 mt-1">
-          <strong>Duration:</strong> {course.duration_hours} {course.duration_unit || 'hours'} ({daysNeeded} day{daysNeeded > 1 ? 's' : ''} needed)
+          <strong>Duration:</strong> {course.duration_hours} {((course as any).duration_unit || 'hours')} ({daysNeeded} day{daysNeeded > 1 ? 's' : ''} needed)
         </p>
       </div>
 
