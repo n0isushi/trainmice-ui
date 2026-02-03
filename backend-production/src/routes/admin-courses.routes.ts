@@ -205,7 +205,12 @@ router.post(
             updateData[field] = req.body[field] ? new Date(req.body[field]) : null;
           } else if (field === 'durationHours') {
             // durationHours is Int in database, so parse as integer
-            updateData[field] = req.body[field] ? Math.round(parseFloat(req.body[field])) : null;
+            // Check for null/undefined/empty string explicitly, not falsy (0 is a valid value)
+            if (req.body[field] !== null && req.body[field] !== undefined && req.body[field] !== '') {
+              updateData[field] = Math.round(parseFloat(req.body[field]));
+            } else {
+              updateData[field] = null;
+            }
           } else if (field === 'price') {
             updateData[field] = req.body[field] ? parseFloat(req.body[field]) : null;
           } else if (field === 'learningObjectives' || field === 'learningOutcomes' || field === 'modules') {
@@ -345,7 +350,12 @@ router.put(
             updateData[field] = req.body[field] ? new Date(req.body[field]) : null;
           } else if (field === 'durationHours') {
             // durationHours is Int in database, so parse as integer
-            updateData[field] = req.body[field] ? Math.round(parseFloat(req.body[field])) : null;
+            // Check for null/undefined/empty string explicitly, not falsy (0 is a valid value)
+            if (req.body[field] !== null && req.body[field] !== undefined && req.body[field] !== '') {
+              updateData[field] = Math.round(parseFloat(req.body[field]));
+            } else {
+              updateData[field] = null;
+            }
           } else if (field === 'price') {
             updateData[field] = req.body[field] ? parseFloat(req.body[field]) : null;
           } else if (field === 'learningObjectives' || field === 'learningOutcomes' || field === 'modules') {

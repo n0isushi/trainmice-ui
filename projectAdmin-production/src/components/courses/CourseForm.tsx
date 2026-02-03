@@ -468,7 +468,9 @@ export const CourseForm: React.FC<CourseFormProps> = ({
         certificate: formData.certificate || null,
         assessment: formData.assessment,
         price: formData.price ? parseFloat(formData.price) : null,
-        durationHours: formData.duration_hours ? Math.round(parseFloat(formData.duration_hours)) : null,
+        durationHours: formData.duration_hours && String(formData.duration_hours).trim() !== '' 
+          ? Math.round(parseFloat(String(formData.duration_hours))) 
+          : null,
         durationUnit: formData.duration_unit,
         startDate: null,
         endDate: formData.end_date || null,
