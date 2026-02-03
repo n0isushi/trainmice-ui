@@ -146,11 +146,11 @@ router.post('/send-email', async (req: AuthRequest, res) => {
 // Confirm booking
 router.put('/:id/confirm', async (req: AuthRequest, res) => {
   try {
-    const { totalSlots, registeredParticipants, eventDate, availabilityId } = req.body;
+    const { totalSlots, registeredParticipants, eventDate, availabilityIds } = req.body;
     // totalSlots: Total number of people who can attend (sets maxPacks for the event)
     // registeredParticipants: Number of people registered now through this request (creates registrations)
     // eventDate: Required for Public bookings, optional for In-House (uses requestedDate if not provided)
-    // availabilityId: Required - Trainer availability ID to use for the event date (standardized)
+    // availabilityIds: Required - Array of trainer availability IDs to use for the event dates (standardized)
 
     if (!totalSlots || parseInt(String(totalSlots)) < 1) {
       return res.status(400).json({ error: 'Total slots is required and must be at least 1' });
@@ -160,8 +160,8 @@ router.put('/:id/confirm', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Registered participants is required and must be at least 1' });
     }
 
-    if (!availabilityId) {
-      return res.status(400).json({ error: 'Trainer availability ID is required. Please select a date from trainer availability calendar.' });
+    if (!availabilityIds || !Array.isArray(availabilityIds) || availabilityIds.length === 0) {
+      return res.status(400).json({ error: 'At least one trainer availability ID is required. Please select date(s) from trainer availability calendar.' });
     }
 
     const totalSlotsNum = parseInt(String(totalSlots));
@@ -191,60 +191,34 @@ router.put('/:id/confirm', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Booking must have an assigned trainer' });
     }
 
-    // Standardized: Use trainer availability to get the event date
-    const availability = await prisma.trainerAvailability.findUnique({
-      where: { id: availabilityId },
+    // Fetch all selected availability records
+    const availabilities = await prisma.trainerAvailability.findMany({
+      where: { id: { in: availabilityIds } },
+      orderBy: { date: 'asc' },
     });
 
-    if (!availability) {
-      return res.status(404).json({ error: 'Trainer availability not found' });
+    if (availabilities.length !== availabilityIds.length) {
+      return res.status(404).json({ error: 'One or more trainer availability records not found' });
     }
 
-    // Verify availability belongs to the booking's trainer
-    if (availability.trainerId !== booking.trainerId) {
-      return res.status(400).json({ error: 'Trainer availability does not belong to the assigned trainer' });
-    }
-
-    // Verify availability is available (unless already booked by this booking)
-    if (availability.status !== 'AVAILABLE' && availability.status !== 'TENTATIVE') {
-      return res.status(400).json({ error: `Selected date is not available. Current status: ${availability.status}` });
-    }
-
-    // Get event date from availability (standardized - always use availability date)
-    const finalEventDate = new Date(availability.date);
-
-    // For PUBLIC bookings, also validate eventDate matches availability date if provided
-    if (booking.requestType === 'PUBLIC' && eventDate) {
-      const providedDate = new Date(eventDate);
-      const availabilityDate = new Date(availability.date);
-      // Compare dates (ignore time)
-      if (providedDate.toDateString() !== availabilityDate.toDateString()) {
-        return res.status(400).json({ error: 'Provided event date does not match selected trainer availability date' });
+    // Validate all availabilities belong to the booking's trainer and are available
+    for (const availability of availabilities) {
+      if (availability.trainerId !== booking.trainerId) {
+        return res.status(400).json({ error: 'One or more availability records do not belong to the assigned trainer' });
+      }
+      if (availability.status !== 'AVAILABLE' && availability.status !== 'TENTATIVE') {
+        return res.status(400).json({ error: `One or more selected dates are not available. Current status: ${availability.status}` });
       }
     }
+
+    // Use first date as eventDate, last date as endDate
+    const finalEventDate = new Date(availabilities[0].date);
+    const lastDate = availabilities.length > 1 ? new Date(availabilities[availabilities.length - 1].date) : null;
 
     const course = booking.course;
     if (!course) {
       return res.status(400).json({ error: 'Booking must have an associated course' });
     }
-
-    // Calculate number of days to block based on course duration
-    const calculateDaysToBlock = (durationHours: number | null, durationUnit: string | null): number => {
-      if (!durationHours || durationHours <= 0) return 1; // Default to 1 day if no duration
-      
-      const unit = (durationUnit || 'hours').toLowerCase();
-      
-      if (unit === 'days') {
-        return Math.ceil(durationHours); // If already in days, use as-is
-      } else if (unit === 'half_day') {
-        return Math.ceil(durationHours * 0.5); // Half day = 0.5 days
-      } else {
-        // Default: hours - assume 8 hours per day
-        return Math.ceil(durationHours / 8); // Convert hours to days (8 hours = 1 day)
-      }
-    };
-
-    const daysToBlock = calculateDaysToBlock(course.durationHours, course.durationUnit);
 
     // Standardized: Check for duplicate events before creating
     const existingEvent = await prisma.event.findFirst({
@@ -258,53 +232,23 @@ router.put('/:id/confirm', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Event already exists for this course and date' });
     }
 
-    // Update booking status and store availability ID
+    // Update booking status and store first availability ID for tracking
     const updated = await prisma.bookingRequest.update({
       where: { id: req.params.id },
       data: { 
         status: 'CONFIRMED',
-        trainerAvailabilityId: availabilityId, // Store availability ID for tracking
+        trainerAvailabilityId: availabilityIds[0], // Store first availability ID for tracking
       },
     });
 
-    // Block multiple days based on course duration
+    // Mark all selected availability records as BOOKED
     try {
-      const datesToBlock: Date[] = [];
-      for (let i = 0; i < daysToBlock; i++) {
-        const blockDate = new Date(finalEventDate);
-        blockDate.setDate(blockDate.getDate() + i);
-        datesToBlock.push(blockDate);
-      }
+      await prisma.trainerAvailability.updateMany({
+        where: { id: { in: availabilityIds } },
+        data: { status: 'BOOKED' },
+      });
 
-      // Update all availability records for the duration period
-      for (const blockDate of datesToBlock) {
-        // Find availability record for this date
-        const availabilityRecord = await prisma.trainerAvailability.findFirst({
-          where: {
-            trainerId: booking.trainerId!,
-            date: blockDate,
-          },
-        });
-
-        if (availabilityRecord) {
-          // Update existing availability to BOOKED
-          await prisma.trainerAvailability.update({
-            where: { id: availabilityRecord.id },
-            data: { status: 'BOOKED' },
-          });
-        } else {
-          // Create new availability record as BOOKED if it doesn't exist
-          await prisma.trainerAvailability.create({
-            data: {
-              trainerId: booking.trainerId!,
-              date: blockDate,
-              status: 'BOOKED',
-            },
-          });
-        }
-      }
-
-      console.log(`[Booking Confirmation] Blocked ${daysToBlock} day(s) for trainer ${booking.trainerId} starting from ${finalEventDate.toISOString().split('T')[0]}`);
+      console.log(`[Booking Confirmation] Marked ${availabilityIds.length} date(s) as BOOKED for trainer ${booking.trainerId}`);
     } catch (error: any) {
       console.error('Error updating trainer availability status:', error);
       // Continue even if update fails, but log error
@@ -313,12 +257,8 @@ router.put('/:id/confirm', async (req: AuthRequest, res) => {
     // Create Event from the confirmed booking
     if (course) {
       const startDate = finalEventDate;
-      // Calculate end date based on duration (use booking.endDate if provided, otherwise calculate from duration)
-      let endDate = booking.endDate ? new Date(booking.endDate) : null;
-      if (!endDate && daysToBlock > 1) {
-        endDate = new Date(finalEventDate);
-        endDate.setDate(endDate.getDate() + (daysToBlock - 1)); // Subtract 1 because start date counts as day 1
-      }
+      // Use last selected date as endDate (if multiple dates), otherwise null
+      const endDate = lastDate;
 
       // Generate event code
       const eventCode = `EVT-${Date.now().toString(36).toUpperCase()}`;

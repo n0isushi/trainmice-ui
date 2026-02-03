@@ -247,10 +247,10 @@ export class ApiClient {
     return this.post<{ message: string; sentCount: number }>('/admin/bookings/send-email', data);
   }
 
-  async confirmBooking(id: string, totalSlots: number, availabilityId: string, registeredParticipants?: number, eventDate?: string) {
+  async confirmBooking(id: string, totalSlots: number, availabilityIds: string[], registeredParticipants?: number, eventDate?: string) {
     return this.put<{ message: string; booking: any; event?: any }>(`/admin/bookings/${id}/confirm`, {
       totalSlots: parseInt(String(totalSlots)),
-      availabilityId: availabilityId,
+      availabilityIds: availabilityIds,
       registeredParticipants: registeredParticipants ? parseInt(String(registeredParticipants)) : undefined,
       eventDate: eventDate || undefined,
     });

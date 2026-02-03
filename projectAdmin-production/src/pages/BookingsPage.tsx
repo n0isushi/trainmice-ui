@@ -111,9 +111,10 @@ export const BookingsPage: React.FC = () => {
   const [totalSlots, setTotalSlots] = useState('');
   const [registeredParticipants, setRegisteredParticipants] = useState('');
   const [eventDate, setEventDate] = useState('');
-  const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<string>('');
+  const [selectedAvailabilityIds, setSelectedAvailabilityIds] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<Array<{ date: string; availabilityId: string }>>([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [courseData, setCourseData] = useState<{ duration_hours: number | null; duration_unit: string | null } | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -253,9 +254,25 @@ export const BookingsPage: React.FC = () => {
       setSelectedBooking(booking || null);
       setTotalSlots('');
       setRegisteredParticipants('');
-      setSelectedAvailabilityId('');
+      setSelectedAvailabilityIds([]);
       setAvailableDates([]);
       setEventDate('');
+      setCourseData(null);
+      
+      // Fetch course data to get duration information
+      if (booking?.courseId) {
+        try {
+          const courseResponse = await apiClient.getAdminCourse(booking.courseId);
+          const course = courseResponse.course;
+          setCourseData({
+            duration_hours: course.durationHours || course.duration_hours || null,
+            duration_unit: course.durationUnit || course.duration_unit || null,
+          });
+        } catch (error) {
+          console.error('Error fetching course data:', error);
+          // Continue without course data, will default to 1 day
+        }
+      }
       
       // Fetch trainer availability if trainer is assigned
       if (booking?.trainerId) {
@@ -282,11 +299,11 @@ export const BookingsPage: React.FC = () => {
       
       const availabilityArray = availabilityResponse?.availability || [];
       
-      // Filter only AVAILABLE and TENTATIVE dates (admin can use tentative dates)
+      // Filter only AVAILABLE dates (matching EventCreationForm.tsx)
       const available = availabilityArray.filter(
         (avail: any) => {
           const status = avail.status?.toUpperCase();
-          return status === 'AVAILABLE' || status === 'TENTATIVE';
+          return status === 'AVAILABLE';
         }
       );
       
@@ -316,6 +333,22 @@ export const BookingsPage: React.FC = () => {
     }
   };
 
+  // Calculate number of days needed based on course duration
+  const calculateDaysNeeded = (): number => {
+    if (!courseData?.duration_hours || courseData.duration_hours <= 0) return 1;
+    
+    const unit = (courseData.duration_unit || 'hours').toLowerCase();
+    
+    if (unit === 'days') {
+      return Math.ceil(courseData.duration_hours);
+    } else if (unit === 'half_day') {
+      return Math.ceil(courseData.duration_hours * 0.5);
+    } else {
+      // Default: hours - assume 8 hours per day
+      return Math.ceil(courseData.duration_hours / 8);
+    }
+  };
+
   const handleConfirmBookingWithPacks = async () => {
     if (!selectedBooking) return;
 
@@ -334,9 +367,12 @@ export const BookingsPage: React.FC = () => {
       return;
     }
 
-    // Availability ID is now required for all bookings
-    if (!selectedAvailabilityId) {
-      showToast('Please select a date from trainer availability calendar', 'error');
+    // Calculate days needed
+    const daysNeeded = calculateDaysNeeded();
+
+    // Validate that exactly daysNeeded dates are selected
+    if (selectedAvailabilityIds.length !== daysNeeded) {
+      showToast(`Please select exactly ${daysNeeded} date(s) from trainer availability (based on course duration)`, 'error');
       return;
     }
 
@@ -344,7 +380,7 @@ export const BookingsPage: React.FC = () => {
       const response = await apiClient.confirmBooking(
         selectedBooking.id, 
         parseInt(totalSlots),
-        selectedAvailabilityId, // Required: Trainer availability ID
+        selectedAvailabilityIds, // Array of availability IDs
         parseInt(registeredParticipants),
         selectedBooking.requestType === 'PUBLIC' ? eventDate : undefined // Optional: For validation
       );
@@ -353,9 +389,10 @@ export const BookingsPage: React.FC = () => {
       setSelectedBooking(null);
       setTotalSlots('');
       setRegisteredParticipants('');
-      setSelectedAvailabilityId('');
+      setSelectedAvailabilityIds([]);
       setAvailableDates([]);
       setEventDate('');
+      setCourseData(null);
       fetchBookings();
     } catch (error: any) {
       showToast(error.message || 'Error confirming booking', 'error');
@@ -1077,9 +1114,10 @@ export const BookingsPage: React.FC = () => {
           setSelectedBooking(null);
           setTotalSlots('');
           setRegisteredParticipants('');
-          setSelectedAvailabilityId('');
+          setSelectedAvailabilityIds([]);
           setAvailableDates([]);
           setEventDate('');
+          setCourseData(null);
         }}
         title="Confirm Booking & Create Event"
         size="md"
@@ -1107,7 +1145,7 @@ export const BookingsPage: React.FC = () => {
             {/* Trainer Availability Date Selection - Required for all bookings */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Event Date from Trainer Availability *
+                Select Event Dates * ({calculateDaysNeeded()} date{calculateDaysNeeded() > 1 ? 's' : ''} required based on course duration)
               </label>
               {loadingAvailability ? (
                 <div className="flex items-center justify-center py-4">
@@ -1122,54 +1160,82 @@ export const BookingsPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <Select
-                    value={selectedAvailabilityId}
-                    onChange={(e) => {
-                      setSelectedAvailabilityId(e.target.value);
-                      // For PUBLIC bookings, also set eventDate for validation
-                      if (selectedBooking.requestType === 'PUBLIC') {
-                        const selected = availableDates.find(d => d.availabilityId === e.target.value);
-                        if (selected) {
-                          setEventDate(selected.date);
-                        }
-                      }
-                    }}
-                    options={[
-                      { value: '', label: 'Choose a date...' },
-                      ...availableDates.map((date) => ({
-                        value: date.availabilityId,
-                        label: new Date(date.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        }),
-                      })),
-                    ]}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Select a date from the trainer's availability calendar. This will mark the date as booked.
-                  </p>
+                  <div className="mt-2 space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {availableDates.map((dateOption) => {
+                      const daysNeeded = calculateDaysNeeded();
+                      const isSelected = selectedAvailabilityIds.includes(dateOption.availabilityId);
+                      const isDisabled = !isSelected && selectedAvailabilityIds.length >= daysNeeded;
+                      return (
+                        <label
+                          key={dateOption.availabilityId}
+                          className={`flex items-center space-x-2 cursor-pointer p-2 rounded ${
+                            isSelected
+                              ? 'bg-teal-50 border-2 border-teal-500'
+                              : isDisabled
+                              ? 'bg-gray-50 opacity-50 cursor-not-allowed'
+                              : 'hover:bg-gray-50 border-2 border-transparent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setSelectedAvailabilityIds(prev => {
+                                if (prev.includes(dateOption.availabilityId)) {
+                                  // Remove if already selected
+                                  return prev.filter(id => id !== dateOption.availabilityId);
+                                } else {
+                                  // Add if not selected, but limit to daysNeeded
+                                  if (prev.length >= daysNeeded) {
+                                    return prev; // Don't add if we already have enough
+                                  }
+                                  return [...prev, dateOption.availabilityId];
+                                }
+                              });
+                            }}
+                            disabled={isDisabled}
+                            className="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded"
+                          />
+                          <span className="text-sm text-gray-700">
+                            {new Date(dateOption.date).toLocaleDateString('en-MY', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {selectedAvailabilityIds.length > 0 && (
+                    <div className="mt-3 p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                      <p className="text-xs font-medium text-teal-900 mb-2">Selected Dates ({selectedAvailabilityIds.length}/{calculateDaysNeeded()}):</p>
+                      <ul className="text-xs text-teal-800 space-y-1">
+                        {availableDates
+                          .filter(d => selectedAvailabilityIds.includes(d.availabilityId))
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .map((dateOption) => (
+                            <li key={dateOption.availabilityId}>
+                              • {new Date(dateOption.date).toLocaleDateString('en-MY', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                  {selectedAvailabilityIds.length !== calculateDaysNeeded() && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Please select exactly {calculateDaysNeeded()} date(s) (based on course duration: {courseData?.duration_hours || 'N/A'} {courseData?.duration_unit || 'hours'})
+                    </p>
+                  )}
                 </>
               )}
             </div>
-
-            {/* Optional event date display for PUBLIC bookings (read-only, shows selected availability date) */}
-            {selectedBooking.requestType === 'PUBLIC' && selectedAvailabilityId && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Selected Event Date:</strong>{' '}
-                  {availableDates.find(d => d.availabilityId === selectedAvailabilityId)?.date 
-                    ? new Date(availableDates.find(d => d.availabilityId === selectedAvailabilityId)!.date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })
-                    : 'N/A'}
-                </p>
-              </div>
-            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1231,7 +1297,7 @@ export const BookingsPage: React.FC = () => {
                   !registeredParticipants ||
                   parseInt(registeredParticipants) < 1 ||
                   parseInt(registeredParticipants) > parseInt(totalSlots) ||
-                  !selectedAvailabilityId ||
+                  selectedAvailabilityIds.length !== calculateDaysNeeded() ||
                   loadingAvailability
                 }
               >
