@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader } from '../common/Card';
+import { Card } from '../common/Card';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Button } from '../common/Button';
+import { Input } from '../common/Input';
+import { Select } from '../common/Select';
 import { apiClient } from '../../lib/api-client';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { showToast } from '../common/Toast';
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 
 interface TrainerCalendarViewProps {
   trainerId: string;
@@ -119,6 +122,13 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
   const [blockedWeekdays, setBlockedWeekdays] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateAvailability, setShowCreateAvailability] = useState(false);
+  const [availabilityForm, setAvailabilityForm] = useState({
+    startDate: '',
+    endDate: '',
+    status: 'AVAILABLE' as 'AVAILABLE' | 'NOT_AVAILABLE',
+  });
+  const [creatingAvailability, setCreatingAvailability] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -157,7 +167,8 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
         });
 
       // Fetch events
-      const allEvents = await apiClient.getEvents({ trainerId, status: 'ACTIVE' }) || [];
+      const eventsResponse = await apiClient.getEvents({ trainerId, status: 'ACTIVE' });
+      const allEvents = (eventsResponse?.events || []) as any[];
       const eventBookings = allEvents
         .map((event: any) => {
           let eventDate = event.eventDate || event.event_date || null;
@@ -289,6 +300,47 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
     setCurrentDate(new Date());
   };
 
+  const handleCreateAvailability = async () => {
+    if (!availabilityForm.startDate || !availabilityForm.endDate) {
+      showToast('Please select both start and end dates', 'error');
+      return;
+    }
+
+    try {
+      const dates: string[] = [];
+      const start = new Date(availabilityForm.startDate);
+      const end = new Date(availabilityForm.endDate);
+      
+      if (end < start) {
+        showToast('End date must be after start date', 'error');
+        return;
+      }
+
+      const current = new Date(start);
+      while (current <= end) {
+        dates.push(formatDate(current));
+        current.setDate(current.getDate() + 1);
+      }
+
+      setCreatingAvailability(true);
+      await apiClient.createTrainerAvailability(trainerId, {
+        dates,
+        status: availabilityForm.status,
+      });
+      
+      showToast(`Availability created successfully for ${dates.length} date(s)`, 'success');
+      setShowCreateAvailability(false);
+      setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
+      
+      // Refresh calendar data
+      await fetchCalendarData();
+    } catch (error: any) {
+      showToast(error.message || 'Error creating availability', 'error');
+    } finally {
+      setCreatingAvailability(false);
+    }
+  };
+
   const firstDay = calendarDays.length > 0 ? calendarDays[0].date.getDay() : 0;
 
   if (loading) {
@@ -320,37 +372,111 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
           <h2 className="text-2xl font-bold text-gray-900">Calendar - {trainerName}</h2>
           <p className="text-gray-600 mt-1">View trainer's availability and bookings</p>
         </div>
-        <Button variant="secondary" onClick={onClose}>
-          Close
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={() => setShowCreateAvailability(!showCreateAvailability)}
+          >
+            <Plus size={18} className="mr-2" />
+            {showCreateAvailability ? 'Cancel' : 'Create Availability'}
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-semibold text-gray-900">
-              {getMonthName(month)} {year}
-            </h3>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={goToToday}>
-                Today
-              </Button>
-              <button
-                onClick={() => navigateMonth('prev')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
-              </button>
-              <button
-                onClick={() => navigateMonth('next')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 text-gray-600" />
-              </button>
+      {/* Create Availability Form */}
+      {showCreateAvailability && (
+        <Card>
+          <div className="flex items-center justify-between p-6 border-b">
+            <h3 className="text-lg font-semibold text-gray-900">Create Availability</h3>
+            <button
+              onClick={() => setShowCreateAvailability(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Start Date *"
+                  type="date"
+                  value={availabilityForm.startDate}
+                  onChange={(e) => setAvailabilityForm({ ...availabilityForm, startDate: e.target.value })}
+                  required
+                />
+                <Input
+                  label="End Date *"
+                  type="date"
+                  value={availabilityForm.endDate}
+                  onChange={(e) => setAvailabilityForm({ ...availabilityForm, endDate: e.target.value })}
+                  required
+                  min={availabilityForm.startDate}
+                />
+              </div>
+              <Select
+                label="Status *"
+                value={availabilityForm.status}
+                onChange={(e) => setAvailabilityForm({ ...availabilityForm, status: e.target.value as 'AVAILABLE' | 'NOT_AVAILABLE' })}
+                options={[
+                  { value: 'AVAILABLE', label: 'Available' },
+                  { value: 'NOT_AVAILABLE', label: 'Not Available' },
+                ]}
+              />
+              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+                <p>This will create availability records for all dates from start date to end date (inclusive).</p>
+                <p className="mt-1">If a date already has an availability record, it will be updated to the selected status.</p>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCreateAvailability(false);
+                    setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleCreateAvailability}
+                  disabled={!availabilityForm.startDate || !availabilityForm.endDate || creatingAvailability}
+                >
+                  {creatingAvailability ? 'Creating...' : 'Create Availability'}
+                </Button>
+              </div>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <div className="flex items-center justify-between p-6 border-b">
+          <h3 className="text-2xl font-semibold text-gray-900">
+            {getMonthName(month)} {year}
+          </h3>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={goToToday}>
+              Today
+            </Button>
+            <button
+              onClick={() => navigateMonth('prev')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            </button>
+            <button
+              onClick={() => navigateMonth('next')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
+        </div>
+        <div className="p-6">
           <div className="space-y-2">
             <div className="grid grid-cols-7 gap-2">
               {SHORT_WEEKDAY_NAMES.map((day) => (
@@ -415,15 +541,15 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
               })}
             </div>
           </div>
-        </CardContent>
+        </div>
       </Card>
 
       <Card>
-        <CardHeader>
+        <div className="p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-900">Legend</h3>
           <p className="text-xs text-gray-600 mt-1">Status indicators for calendar dates</p>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-6">
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 bg-white border-2 border-green-500 rounded"></div>
@@ -446,7 +572,7 @@ export const TrainerCalendarView: React.FC<TrainerCalendarViewProps> = ({
               <span className="text-gray-700">Booked ({filterCounts.booked})</span>
             </div>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </div>
   );

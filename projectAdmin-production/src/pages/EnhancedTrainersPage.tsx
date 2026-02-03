@@ -10,7 +10,7 @@ import { TrainerForm } from '../components/trainers/TrainerForm';
 import { TrainerCalendarView } from '../components/trainers/TrainerCalendarView';
 import { apiClient } from '../lib/api-client';
 import { Trainer } from '../types';
-import { Plus, Edit, Trash2, Phone, MapPin, Filter, Calendar, BarChart3, X, CheckCircle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, MapPin, Filter, Calendar, BarChart3, X, CheckCircle } from 'lucide-react';
 import { showToast } from '../components/common/Toast';
 
 interface TrainerAnalytics {
@@ -31,7 +31,6 @@ export const EnhancedTrainersPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showHRDCModal, setShowHRDCModal] = useState(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
-  const [showBlockModal, setShowBlockModal] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<Trainer | null>(null);
@@ -62,12 +61,6 @@ export const EnhancedTrainersPage: React.FC = () => {
     verified: false,
   });
 
-  // Create availability form
-  const [availabilityForm, setAvailabilityForm] = useState({
-    startDate: '',
-    endDate: '',
-    status: 'AVAILABLE' as 'AVAILABLE' | 'NOT_AVAILABLE',
-  });
 
   useEffect(() => {
     fetchTrainers();
@@ -194,45 +187,6 @@ export const EnhancedTrainersPage: React.FC = () => {
     }
   };
 
-  const handleCreateAvailability = async () => {
-    if (!selectedTrainer || !availabilityForm.startDate || !availabilityForm.endDate) return;
-
-    try {
-      // Generate array of dates from startDate to endDate
-      const dates: string[] = [];
-      const start = new Date(availabilityForm.startDate);
-      const end = new Date(availabilityForm.endDate);
-      
-      // Ensure end date is after start date
-      if (end < start) {
-        showToast('End date must be after start date', 'error');
-        return;
-      }
-
-      const current = new Date(start);
-      while (current <= end) {
-        dates.push(formatDate(current));
-        current.setDate(current.getDate() + 1);
-      }
-
-      await apiClient.createTrainerAvailability(selectedTrainer.id, {
-        dates,
-        status: availabilityForm.status,
-      });
-      showToast(`Availability created successfully for ${dates.length} date(s)`, 'success');
-      setShowBlockModal(false);
-      setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
-    } catch (error: any) {
-      showToast(error.message || 'Error creating availability', 'error');
-    }
-  };
-
-  const formatDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   const handleViewAnalytics = async (trainer: Trainer) => {
     setSelectedTrainer(trainer);
@@ -512,19 +466,7 @@ export const EnhancedTrainersPage: React.FC = () => {
                             setSelectedTrainerForCalendar(trainer);
                             setShowCalendarModal(true);
                           }}
-                          title="View Calendar"
-                        >
-                          <Eye size={16} />
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTrainer(trainer);
-                            setAvailabilityForm({ startDate: '', endDate: '', status: 'AVAILABLE' });
-                            setShowBlockModal(true);
-                          }}
-                          title="Create Availability"
+                          title="View Calendar & Create Availability"
                         >
                           <Calendar size={16} />
                         </Button>
@@ -631,52 +573,6 @@ export const EnhancedTrainersPage: React.FC = () => {
             <Button variant="primary" onClick={handleHRDCVerification}>
               <CheckCircle size={18} className="mr-2" />
               Verify
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Create Availability Modal */}
-      <Modal isOpen={showBlockModal} onClose={() => setShowBlockModal(false)} title="Create Availability for Trainer">
-        <div className="space-y-4">
-          <Input
-            label="Start Date *"
-            type="date"
-            value={availabilityForm.startDate}
-            onChange={(e) => setAvailabilityForm({ ...availabilityForm, startDate: e.target.value })}
-            required
-          />
-          <Input
-            label="End Date *"
-            type="date"
-            value={availabilityForm.endDate}
-            onChange={(e) => setAvailabilityForm({ ...availabilityForm, endDate: e.target.value })}
-            required
-            min={availabilityForm.startDate}
-          />
-          <Select
-            label="Status *"
-            value={availabilityForm.status}
-            onChange={(e) => setAvailabilityForm({ ...availabilityForm, status: e.target.value as 'AVAILABLE' | 'NOT_AVAILABLE' })}
-            options={[
-              { value: 'AVAILABLE', label: 'Available' },
-              { value: 'NOT_AVAILABLE', label: 'Not Available' },
-            ]}
-          />
-          <div className="text-sm text-gray-600">
-            <p>This will create availability records for all dates from start date to end date (inclusive).</p>
-            <p className="mt-1">If a date already has an availability record, it will be updated to the selected status.</p>
-          </div>
-          <div className="flex justify-end space-x-3 pt-4">
-            <Button variant="secondary" onClick={() => setShowBlockModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreateAvailability}
-              disabled={!availabilityForm.startDate || !availabilityForm.endDate}
-            >
-              Create Availability
             </Button>
           </div>
         </div>
