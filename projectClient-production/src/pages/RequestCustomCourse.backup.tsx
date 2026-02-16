@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, User, Mail, BookOpen, MessageSquare, Briefcase, Info, X } from 'lucide-react';
+import { auth, type User as AuthUser } from '../lib/auth';
 import { apiClient } from '../lib/api-client';
-import { useCourseRequestAuth } from '../hooks/useCourseRequestAuth';
 import { LoginModal } from '../components/LoginModal';
 import { SignupModal } from '../components/SignupModal';
 
@@ -24,9 +24,14 @@ const INDUSTRIES = [
 
 export function RequestCustomCourse() {
   const navigate = useNavigate();
+  // ============================================================
+  // 🔧 MOCK AUTHENTICATION - FOR DEVELOPMENT/PREVIEW ONLY
+  // ============================================================
+  const MOCK_USER_ENABLED = false; // Change to false to see the signup form
+  // ============================================================
 
-  // custom auth hook (handles mock & real auth)
-  const { user, isLoading: isLoadingAuth, companyData } = useCourseRequestAuth();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   // Modal State
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -35,13 +40,6 @@ export function RequestCustomCourse() {
 
   // Tab and Step Management
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  useEffect(() => {
-    if (currentStep === 4) {
-      setIsUnlocked(true);
-    }
-  }, [currentStep]);
 
   const [courseData, setCourseData] = useState({
     courseName: '',
@@ -58,17 +56,89 @@ export function RequestCustomCourse() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // Sync hook data to local form state when available
   useEffect(() => {
-    if (companyData) {
-      setCourseData((prev) => ({
-        ...prev,
-        contactPerson: companyData.contactPerson,
-        email: companyData.email,
-        companyName: companyData.companyName,
-      }));
-    }
-  }, [companyData]);
+    const fetchClientData = async () => {
+      // If mock user is enabled, skip authentication and use mock data
+      if (MOCK_USER_ENABLED) {
+        const mockUser: AuthUser = {
+          id: 'mock-user-123',
+          email: 'demo@company.com',
+          fullName: 'Demo User',
+          role: 'CLIENT',
+        };
+        setUser(mockUser);
+        setIsLoadingAuth(false);
+        setCourseData((prev) => ({
+          ...prev,
+          contactPerson: 'Demo User',
+          email: 'demo@company.com',
+          companyName: 'Demo Company Sdn Bhd',
+        }));
+        return;
+      }
+
+      // Normal authentication flow
+      const { user } = await auth.getSession();
+      setUser(user);
+      setIsLoadingAuth(false);
+
+      if (user) {
+        try {
+          // Fetch client profile to get company information
+          const profileResponse = await apiClient.getClientProfile();
+          const client = profileResponse.client;
+
+          // Pre-fill form with client data
+          setCourseData((prev) => ({
+            ...prev,
+            contactPerson: user.fullName || client?.userName || user.email?.split('@')[0] || '',
+            email: user.email || client?.companyEmail || '',
+            companyName: client?.companyName || '',
+          }));
+        } catch (error) {
+          console.error('Error fetching client profile:', error);
+          // Fallback to user data if profile fetch fails
+          setCourseData((prev) => ({
+            ...prev,
+            contactPerson: user.fullName || user.email?.split('@')[0] || '',
+            email: user.email || '',
+          }));
+        }
+        setIsLoginOpen(false);
+      }
+    };
+
+    fetchClientData();
+
+    const unsubscribe = auth.onAuthStateChange(async (user) => {
+      setUser(user);
+      if (user) {
+        try {
+          // Fetch client profile to get company information
+          const profileResponse = await apiClient.getClientProfile();
+          const client = profileResponse.client;
+
+          // Pre-fill form with client data
+          setCourseData((prev) => ({
+            ...prev,
+            contactPerson: user.fullName || client?.userName || user.email?.split('@')[0] || '',
+            email: user.email || client?.companyEmail || '',
+            companyName: client?.companyName || '',
+          }));
+        } catch (error) {
+          console.error('Error fetching client profile:', error);
+          // Fallback to user data if profile fetch fails
+          setCourseData((prev) => ({
+            ...prev,
+            contactPerson: user.fullName || user.email?.split('@')[0] || '',
+            email: user.email || '',
+          }));
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleAuthSuccess = () => {
     setIsLoginOpen(false);
@@ -245,7 +315,7 @@ export function RequestCustomCourse() {
 
             <div className="max-w-4xl mx-auto">
               {/* User Guidance Banner */}
-              {isUnlocked && (
+              {showHelpMessage && (
                 <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start justify-between animate-fade-in relative z-20">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 p-1 bg-blue-100 rounded-full">
@@ -258,6 +328,12 @@ export function RequestCustomCourse() {
                       </p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setShowHelpMessage(false)}
+                    className="p-1 hover:bg-blue-100 rounded-lg text-blue-400 hover:text-blue-600 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
@@ -269,14 +345,12 @@ export function RequestCustomCourse() {
                       <div className="flex flex-col items-center">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (isUnlocked) setCurrentStep(step as 1 | 2 | 3 | 4);
-                          }}
+                          onClick={() => setCurrentStep(step as 1 | 2 | 3 | 4)}
                           className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all duration-300 ${currentStep === step
                             ? 'bg-yellow-400 text-gray-900 shadow-lg scale-110 ring-4 ring-yellow-100'
                             : currentStep > step
-                              ? `bg-green-500 text-white shadow-sm ${isUnlocked ? 'hover:bg-green-600 hover:shadow-md cursor-pointer' : 'cursor-default'}`
-                              : `bg-gray-100 text-gray-400 ${isUnlocked ? 'hover:bg-gray-200 hover:text-gray-600 cursor-pointer' : 'cursor-default'}`
+                              ? 'bg-green-500 text-white hover:bg-green-600 hover:shadow-md cursor-pointer'
+                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 cursor-pointer'
                             }`}
                         >
                           {currentStep > step ? (
@@ -289,14 +363,8 @@ export function RequestCustomCourse() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (isUnlocked) setCurrentStep(step as 1 | 2 | 3 | 4);
-                          }}
-                          className={`mt-2 text-sm font-medium transition-colors ${currentStep === step
-                            ? 'text-gray-900'
-                            : isUnlocked
-                              ? 'text-gray-500 hover:text-gray-700 cursor-pointer'
-                              : 'text-gray-400 cursor-default'
+                          onClick={() => setCurrentStep(step as 1 | 2 | 3 | 4)}
+                          className={`mt-2 text-sm font-medium transition-colors ${currentStep === step ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
                           {step === 1 && 'Training Mode'}

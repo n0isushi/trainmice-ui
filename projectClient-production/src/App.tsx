@@ -7,6 +7,7 @@ import { CompareTrainers } from './pages/CompareTrainers';
 import { CalendarTest } from './pages/CalendarTest';
 import { ContactUs } from './pages/ContactUs';
 import { RequestCustomCourse } from './pages/RequestCustomCourse';
+import { PublicTraining } from './pages/PublicTraining';
 import { VerifyEmailSuccess } from './pages/VerifyEmailSuccess';
 import { FeedbackForm } from './pages/FeedbackForm';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -45,6 +46,7 @@ function App() {
         <Route path="/compare-trainers" element={<CompareTrainers />} />
         <Route path="/calendar-test" element={<CalendarTest />} />
         <Route path="/contact-us" element={<ContactUs />} />
+        <Route path="/public-training" element={<PublicTraining />} />
         <Route path="/request-custom-course" element={<RequestCustomCourse />} />
         <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
         <Route path="/feedback/:eventId" element={<FeedbackForm />} />

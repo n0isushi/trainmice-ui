@@ -6,7 +6,7 @@ type SearchBarProps = {
   placeholder?: string;
 };
 
-export function SearchBar({ value, onChange, placeholder = 'Search courses, trainers, or topics…' }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder = 'Search courses, categories or topics…' }: SearchBarProps) {
   return (
     <div className="relative w-full max-w-2xl">
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />

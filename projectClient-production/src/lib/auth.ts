@@ -40,6 +40,7 @@ class AuthService {
    */
   async getSession(): Promise<{ user: User | null; session: { access_token: string } | null }> {
     const token = apiClient.getToken();
+
     if (!token) {
       return { user: null, session: null };
     }

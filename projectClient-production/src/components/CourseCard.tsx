@@ -5,11 +5,20 @@ import { getCategoryColor } from '../utils/categoryColors';
 
 type CourseCardProps = {
   course: Course;
+  onClick?: () => void;
 };
 
-export function CourseCard({ course }: CourseCardProps) {
+export function CourseCard({ course, onClick }: CourseCardProps) {
   const navigate = useNavigate();
   const categoryColors = getCategoryColor(course.category || null);
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      navigate(`/courses/${course.id}`);
+    }
+  };
 
   const renderStars = (rating: number | null) => {
     if (!rating) return null;
@@ -18,9 +27,8 @@ export function CourseCard({ course }: CourseCardProps) {
       stars.push(
         <Star
           key={i}
-          className={`w-4 h-4 ${
-            i <= Math.round(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'
-          }`}
+          className={`w-4 h-4 ${i <= Math.round(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'
+            }`}
         />
       );
     }
@@ -28,19 +36,34 @@ export function CourseCard({ course }: CourseCardProps) {
   };
 
   // Parse duration to get days
-  const durationDays = course.duration_unit === 'days' 
-    ? course.duration_hours 
+  const durationDays = course.duration_unit === 'days'
+    ? course.duration_hours
     : course.duration_unit === 'half_day'
-    ? Math.ceil((course.duration_hours || 0) * 0.5)
-    : Math.ceil((course.duration_hours || 0) / 8);
+      ? Math.ceil((course.duration_hours || 0) * 0.5)
+      : Math.ceil((course.duration_hours || 0) / 8);
 
   return (
     <div
-      onClick={() => navigate(`/courses/${course.id}`)}
+      onClick={handleClick}
       className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border-2 border-yellow-400 hover:border-teal-500 cursor-pointer group"
     >
-      {/* Pastel colored image placeholder based on category */}
-      <div className={`w-full h-48 ${categoryColors.bg} ${categoryColors.border} border-b-2`}>
+      {/* Split Header: Color Strip | Image Placeholder */}
+      <div className="flex h-48 border-b border-gray-100">
+        {/* Color Strip - Width based on user request (e.g., small strip) */}
+        <div className={`w-5 h-full ${categoryColors.bg}`}></div>
+
+        {/* Image Placeholder Area */}
+        <div className="flex-1 bg-gray-200 relative overflow-hidden flex items-center justify-center">
+          {(course as any).image_url ? (
+            <img
+              src={(course as any).image_url}
+              alt={course.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-gray-400 text-xs">Image</span>
+          )}
+        </div>
       </div>
 
       <div className="p-5">
